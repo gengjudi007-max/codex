@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
+from codex.services.text_utils import infer_city, infer_company, infer_region, normalize_text
+
 
 @dataclass
 class TopicRule:
@@ -29,30 +31,29 @@ class TopicRule:
             "reason": self.reason,
             "score": self.score,
             "source": item.get("source", "unknown"),
+            "source_url": item.get("url") or item.get("source_url"),
             "trigger": item.get("title") or item.get("summary") or "未命名信息源",
             "materials": self.materials,
             "interview_targets": self.interview_targets,
             "questions": self.questions,
+            "input_item": item,
         }
 
 
 def _safe_item(item: Dict[str, Any]) -> Dict[str, Any]:
+    text = _normalize_text(item)
     return {
         "title": item.get("title", "相关动态"),
-        "company": item.get("company", "相关企业"),
-        "city": item.get("city", "相关城市"),
-        "region": item.get("region", "相关区域"),
+        "company": item.get("company") or infer_company(text) or "相关企业",
+        "city": item.get("city") or infer_city(text) or "相关城市",
+        "region": item.get("region") or infer_region(text) or "相关区域",
     }
 
 
 def _normalize_text(item: Dict[str, Any]) -> str:
     values = []
     for key in ("title", "summary", "content", "keywords", "company", "city", "region"):
-        value = item.get(key, "")
-        if isinstance(value, list):
-            values.extend(str(v) for v in value)
-        else:
-            values.append(str(value))
+        values.append(normalize_text(item.get(key, "")))
     return " ".join(values)
 
 
@@ -92,7 +93,7 @@ REAL_ESTATE_TOPIC_RULES: List[TopicRule] = [
     TopicRule(
         name="land_market_soes_city_investment",
         category="土地市场",
-        keywords=["城投拿地", "底价成交", "流拍", "托底", "地方平台", "土地财政", "集中供地"],
+        keywords=["城投拿地", "土拍", "土地市场", "溢价率", "拿地", "底价成交", "流拍", "托底", "地方平台", "土地财政", "集中供地"],
         topic_template="{city}土地市场变化：城投托底与土地财政压力再观察",
         angle="分析城投拿地占比、成交溢价率、流拍率和地块后续开发状态，判断土地市场真实热度。",
         reason="土地市场是房地产周期和地方财政压力的重要前置信号。",
