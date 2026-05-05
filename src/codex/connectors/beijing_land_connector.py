@@ -7,15 +7,8 @@ import requests
 
 
 BASE_URL = "https://yewu.ghzrzyw.beijing.gov.cn"
+API_URL = f"{BASE_URL}/zkdncms/tdgltdsc/tdzpgxm/esSearchList"
 SOURCE = "北京市规划和自然资源委员会"
-
-API_CANDIDATES = [
-    f"{BASE_URL}/esSearchList",
-    f"{BASE_URL}/gwxxfb/esSearchList",
-    f"{BASE_URL}/gwxxfb/tdsc/esSearchList",
-    f"{BASE_URL}/gwxxfb/tdsc/esSearchList.do",
-    f"{BASE_URL}/gwxxfb/tdsc/esSearchList.json",
-]
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
@@ -46,26 +39,15 @@ def fetch_beijing_land_page(page: int = 1, limit: int = 10) -> Dict[str, Any]:
         "t": timestamp,
         "page": page,
         "limit": limit,
-        "landuse": "",
-        "type1": "",
+        "landusetype1": "",
         "announcetype": "",
         "county": "",
         "gjz": "",
-        "_": timestamp + 1,
+        "_": timestamp,
     }
-    errors = []
-    for api_url in API_CANDIDATES:
-        try:
-            resp = requests.get(api_url, params=params, headers=HEADERS, timeout=15)
-            if resp.status_code == 404:
-                errors.append(f"404 {resp.url}")
-                continue
-            resp.raise_for_status()
-            return resp.json()
-        except Exception as exc:
-            errors.append(f"{api_url}: {exc}")
-            continue
-    raise RuntimeError("北京土地接口候选地址均失败：\n" + "\n".join(errors))
+    resp = requests.get(API_URL, params=params, headers=HEADERS, timeout=15)
+    resp.raise_for_status()
+    return resp.json()
 
 
 def extract_rows(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -84,7 +66,7 @@ def extract_rows(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
 def normalize_api_row(row: Dict[str, Any]) -> Dict[str, Any]:
     land_name = pick(row, ["title", "landName", "zdmc", "xmmc", "name", "bt"])
     district = pick(row, ["county", "district", "qx", "xzq", "qymc"])
-    land_use = pick(row, ["landuse", "landUse", "tdyt", "ghyt", "yt"])
+    land_use = pick(row, ["landusetype1", "landuse", "landUse", "tdyt", "ghyt", "yt"])
     status = pick(row, ["status", "jyzt", "zt", "announcetype", "gglx"])
     date = pick(row, ["date", "cjsj", "jzsj", "fbsj", "pubdate", "createTime"])
     url = build_detail_url(row)
