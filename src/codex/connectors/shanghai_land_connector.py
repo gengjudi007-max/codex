@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import warnings
 from typing import Any, Dict, List, Optional
 
 import requests
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
 
 BASE_URL = "https://biz.ghzyj.sh.gov.cn"
@@ -23,20 +25,30 @@ def fetch_shanghai_land_items(
     api_url: str,
     payload: Optional[Dict[str, Any]] = None,
     max_pages: int = 1,
+    verify_ssl: bool = False,
 ) -> List[Dict[str, Any]]:
     """抓取上海土地成交列表。
 
-    上海接口带动态防护参数，第一版要求从浏览器 Network 复制完整 Request URL 传入。
-    payload 可在后续从 Network 的 Form Data 中补充。
+    上海站点存在旧式TLS兼容问题，默认 verify_ssl=False 以便本地测试。
+    如生产环境运行，建议改用浏览器导出的CSV或单独配置兼容TLS环境。
     """
     results: List[Dict[str, Any]] = []
     payload = payload or default_payload()
+
+    if not verify_ssl:
+        warnings.simplefilter("ignore", InsecureRequestWarning)
 
     for page in range(1, max_pages + 1):
         page_payload = dict(payload)
         page_payload.setdefault("page", page)
         page_payload.setdefault("limit", 10)
-        response = requests.post(api_url, data=page_payload, headers=HEADERS, timeout=15)
+        response = requests.post(
+            api_url,
+            data=page_payload,
+            headers=HEADERS,
+            timeout=15,
+            verify=verify_ssl,
+        )
         response.raise_for_status()
         data = safe_json(response)
         rows = extract_rows(data)
