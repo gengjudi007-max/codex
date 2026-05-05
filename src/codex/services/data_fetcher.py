@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import re
+from urllib.parse import urlparse
 
 try:
     import requests
 except ImportError:  # pragma: no cover
     requests = None
+
+from codex.services.evidence import source_quality
 
 
 @dataclass
@@ -55,6 +59,11 @@ def fetch_sources(sources: List[DataSource], timeout: int = 15) -> List[Dict[str
     return results
 
 
+def fetch_source_dicts(sources: List[Dict[str, Any]], timeout: int = 15) -> List[Dict[str, Any]]:
+    """Fetch sources supplied as JSON-compatible dictionaries."""
+    return fetch_sources([_source_from_dict(source) for source in sources], timeout=timeout)
+
+
 def fetch_source(source: DataSource, timeout: int = 15) -> Dict[str, Any]:
     if requests is None:
         raise DataFetchError("requests is not installed. Run: pip install requests beautifulsoup4")
@@ -68,8 +77,9 @@ def fetch_source(source: DataSource, timeout: int = 15) -> Dict[str, Any]:
     )
     response.raise_for_status()
 
-    text = _extract_text(response.text)
+    text = _parse_response(response.text, source.parser)
     metrics = extract_basic_metrics(text)
+    quality = source_quality(source.url, source.name)
 
     return {
         "type": source.source_type,
@@ -81,6 +91,8 @@ def fetch_source(source: DataSource, timeout: int = 15) -> Dict[str, Any]:
         "content": text,
         "summary": text[:500],
         "metrics": metrics,
+        "source_quality": quality,
+        "fetched_from_domain": urlparse(source.url).netloc,
         "status": "ok",
     }
 
@@ -106,6 +118,44 @@ def extract_basic_metrics(text: str) -> Dict[str, Any]:
         metrics["areas_wan_sqm"].append(float(match.group(1)))
 
     return metrics
+
+
+def _source_from_dict(source: Dict[str, Any]) -> DataSource:
+    return DataSource(
+        name=str(source.get("name") or source.get("source") or source.get("url") or "未命名信源"),
+        source_type=str(source.get("source_type") or source.get("type") or "public_source"),
+        url=str(source.get("url") or ""),
+        region=source.get("region"),
+        company=source.get("company"),
+        parser=str(source.get("parser") or "plain_text"),
+    )
+
+
+def _parse_response(body: str, parser: str) -> str:
+    if parser == "json":
+        return _extract_json_text(body)
+    return _extract_text(body)
+
+
+def _extract_json_text(body: str) -> str:
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return _extract_text(body)
+    values: List[str] = []
+    _walk_json(payload, values)
+    return re.sub(r"\s+", " ", " ".join(values)).strip()
+
+
+def _walk_json(value: Any, values: List[str]) -> None:
+    if isinstance(value, dict):
+        for item in value.values():
+            _walk_json(item, values)
+    elif isinstance(value, list):
+        for item in value:
+            _walk_json(item, values)
+    elif isinstance(value, (str, int, float)):
+        values.append(str(value))
 
 
 def _extract_text(html_or_text: str) -> str:

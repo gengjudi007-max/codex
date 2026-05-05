@@ -67,20 +67,31 @@
 
 ```text
 codex/
-├── docs/                         # 项目文档、方法论、选题规则
 ├── examples/                     # 示例输入和示例输出
 ├── src/
 │   └── codex/
 │       ├── __init__.py
 │       ├── main.py               # 程序入口
-│       ├── config.py             # 配置管理
-│       ├── models/               # 数据结构定义
+│       ├── interaction.py        # 统一交互和自动路由
+│       ├── interactive.py        # 命令行互动入口
+│       ├── server.py             # 本地网页/API 服务
+│       ├── config.py             # 环境变量配置
 │       ├── services/
+│       │   ├── evidence.py       # 证据链、置信度和核验状态
 │       │   ├── topic_finder.py   # 选题发现
-│       │   ├── material_builder.py # 素材整理
-│       │   ├── interview_planner.py # 采访方案
-│       │   └── draft_editor.py   # 稿件优化
-│       └── utils/                # 通用工具函数
+│       │   ├── topic_scoring.py  # 选题评分
+│       │   ├── material_builder.py # 素材、数据和核验清单
+│       │   ├── interview_planner.py # 分层采访方案
+│       │   ├── photo_planner.py # 新闻现场摄影策划
+│       │   ├── signal_monitor.py # 行业信息变化监测
+│       │   ├── annual_report_parser.py # 年报指标解析
+│       │   ├── company_comparator.py # 房企横向比较
+│       │   ├── city_land_comparator.py # 城市土地市场比较
+│       │   ├── city_investment_land_model.py # 城投兜底拿地专题模型
+│       │   ├── draft_editor.py   # 稿件体检和编辑建议
+│       │   ├── source_store.py   # JSONL 资料库存储、统计和流式检索
+│       │   ├── bulk_importer.py  # 本地文件夹批量导入
+│       │   └── text_utils.py     # 文本清洗和城市/公司识别
 ├── tests/                        # 测试代码
 ├── .gitignore
 ├── pyproject.toml
@@ -98,36 +109,69 @@ codex/
 - 是否出现市场拐点或区域分化
 - 是否具备新闻价值、商业价值和可操作性
 
+所有进入选题流水线的输出都会补充：
+
+- `evidence`: 原始输入、链接或必备材料线索
+- `confidence`: 当前证据强度评分
+- `verification_status`: `verified` / `needs_check` / `insufficient_source`
+- `limitations`: 不能直接下结论的原因
+- `claim_boundary`: 该输出可被使用的边界
+
 ### 2. 素材整理 `material_builder`
 
 用于围绕一个选题生成资料清单，包括：
 
-- 政策文件
-- 企业公告
-- 财务数据
-- 土地成交信息
-- 第三方机构报告
-- 历史报道与行业背景
+- 必备材料
+- 关键数据点
+- 来源渠道
+- 核验步骤
+- 缺失数据风险
 
 ### 3. 采访策划 `interview_planner`
 
 用于生成采访对象和采访问题，包括：
 
-- 企业人士
-- 政策研究人士
-- 券商/机构分析师
-- 地方政府或平台公司人士
-- 购房者、业主、项目参与方等一线对象
+- 事实核验问题
+- 原因与机制问题
+- 影响和后续跟踪问题
+- 采访顺序
+- 采访红线和匿名信源注意事项
 
-### 4. 稿件优化 `draft_editor`
+### 4. 摄影策划 `photo_planner`
 
-用于对初稿进行编辑和提升，包括：
+用于把选题转化为可执行的现场拍摄方案，包括：
 
-- 修改错别字、标点、语法和病句
-- 压缩重复、堆砌和通稿化表达
-- 强化财经报道的事实链、数据链和逻辑链
-- 优化导语、小标题、段落衔接和结尾收束
-- 调整为第三方、客观、克制、有判断力的财经媒体表达
+- 视觉主张
+- 必拍画面和备选画面
+- 人物肖像、工地、售楼处、小区内部等拍摄授权提醒
+- 图注核验清单
+- 现场画面误读风险
+
+### 5. 信息变化监测 `signal_monitor`
+
+用于从连续输入的信息流中识别变化信号，包括：
+
+- 政策、市场、企业、土地、金融和城市更新领域归类
+- 异常变化、趋势拐点、风险暴露、政策边际变化和主体动作识别
+- 优先级排序、跟踪清单和下一步核验动作
+
+### 6. 稿件优化 `draft_editor`
+
+用于对初稿进行基础体检，包括：
+
+- 清洗段落和空白
+- 识别模板化表达
+- 标记过长段落
+- 检查数字是否缺少来源
+- 给出结构建议和标题方向
+
+### 7. 结构化模型
+
+项目还支持三类结构化分析：
+
+- `annual_report_parser`: 将房企年报指标转化为选题线索
+- `company_comparator`: 横向比较房企利润、销售、拿地、债务和现金流
+- `city_land_comparator`: 比较城市城投依赖度、市场修复程度、消化风险和专项债闭环风险
 
 ## 快速开始
 
@@ -147,15 +191,127 @@ Windows 环境：
 python -m codex.main
 ```
 
+## 互动连接方式
+
+统一交互层会自动识别输入类型，把自然语言、选题线索 JSON、城市土地数据、房企指标数据、年报数据或稿件文本接入对应分析模块。
+
+命令行互动：
+
+```bash
+PYTHONPATH=src python -m codex.interactive
+```
+
+本地网页/API：
+
+```bash
+PYTHONPATH=src python -m codex.server
+```
+
+可通过环境变量或参数调整端口：
+
+```bash
+CODEX_PORT=8766 PYTHONPATH=src python -m codex.server
+PYTHONPATH=src python -m codex.server --port 8766
+```
+
+启动后打开：
+
+```text
+http://127.0.0.1:8765/
+```
+
+健康检查：
+
+```bash
+curl http://127.0.0.1:8765/health
+```
+
+接口调用示例：
+
+```bash
+curl -X POST http://127.0.0.1:8765/api/interact \
+  -H "Content-Type: application/json" \
+  -d '{"message":"武汉土拍城投占比超70%，多宗地块底价成交，地方平台托底土地市场。"}'
+```
+
+结构化 JSON 会自动路由：
+
+- `items`: 进入选题发现、评分、素材和采访策划流程
+- `companies`: 进入房企经营横向比较模型
+- `cities`: 进入城市土地市场比较模型
+- `yearly` / `disposal` / `special_bonds`: 进入城投兜底拿地专题模型
+- `report` / `reports`: 进入年报解析，再进入选题流程
+- `mode: "draft_edit"` + `text`: 进入稿件体检流程
+- `mode: "signal_monitor"` + `items`: 进入行业信息变化监测
+- `tracking: true` + `items`: 自动进入行业信息变化监测
+- `sources`: 抓取公开 URL 后，同时进入选题流水线和信号监测
+- `mode: "search_store"` + `path` + `query`: 流式检索本地资料库
+- `mode: "store_summary"` + `path`: 统计资料库规模、文件类型和状态
+
+年报示例：
+
+```bash
+PYTHONPATH=src python examples/annual_report_case.py
+```
+
+城投公司兜底拿地专题示例：
+
+```bash
+PYTHONPATH=src python examples/city_investment_land_case.py
+```
+
+本地资料库检索示例：
+
+```json
+{
+  "mode": "search_store",
+  "path": "data/local_workfile_library.jsonl",
+  "query": "城投 土地",
+  "limit": 10
+}
+```
+
+资料库统计示例：
+
+```json
+{
+  "mode": "store_summary",
+  "path": "data/local_workfile_library_extra.jsonl"
+}
+```
+
+更多说明见 `docs/LOCAL_LIBRARY.md`。
+
+测试：
+
+```bash
+PYTHONPATH=src python3 -m unittest discover -s tests -v
+```
+
+## 稳定性设计
+
+- 坏输入返回明确错误，不直接抛出栈信息给调用方
+- 自由文本会尝试识别城市和公司，降低手动填字段成本
+- API 限制请求体大小，默认 `CODEX_MAX_BODY_BYTES=1000000`
+- 本地 API 支持 CORS、`OPTIONS` 和 `/health`
+- 单元测试覆盖交互路由、选题识别、材料清单、稿件体检和结构化模型
+- CI 会在 GitHub Actions 中对 Python 3.9 和 3.12 运行单元测试
+- 输出默认区分已核验事实、待核验线索和证据不足内容
+- 大型本地资料库采用流式统计和检索，避免日常检索时整库加载到内存
+- 当前系统是规则和指标模型，不会替代事实核查；输出应作为报道线索和采访计划使用
+
 ## 后续开发计划
 
-- [ ] 接入政策文件、公告、市场数据等信息源
-- [ ] 建立房地产报道选题评分规则
-- [ ] 建立政策语义变化识别模板
-- [ ] 建立上市房企公告解析模板
-- [ ] 建立土地市场异动识别模板
-- [ ] 增加稿件精校和财经媒体风格优化模块
-- [ ] 增加示例选题库和采访提纲模板
+- [x] 建立房地产报道选题评分规则
+- [x] 建立上市房企年报指标解析模板
+- [x] 建立土地市场异动识别模板
+- [x] 增加稿件基础体检模块
+- [x] 增加示例和单元测试
+- [ ] 接入更多政策文件、公告、市场数据等信息源
+- [ ] 增加 PDF/HTML 年报自动抽取
+- [ ] 增加更细的城市、公司和关键词词库
+- [ ] 增加持久化任务队列和用户会话
+- [ ] 增加前端结构化输入表单
 
 ## License
 
