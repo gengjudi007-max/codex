@@ -19,6 +19,7 @@ HEADERS = {
     "Referer": REFERER,
     "Origin": BASE_URL,
     "Accept": "*/*",
+    "Accept-Language": "zh,zh-CN;q=0.9",
     "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
     "X-Requested-With": "XMLHttpRequest",
 }
@@ -30,6 +31,7 @@ def fetch_shanghai_land_items(
     max_pages: int = 1,
     verify_ssl: bool = False,
     use_curl_fallback: bool = True,
+    cookie: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     results: List[Dict[str, Any]] = []
     payload = payload or default_payload()
@@ -39,9 +41,9 @@ def fetch_shanghai_land_items(
 
     for page in range(1, max_pages + 1):
         page_payload = dict(payload)
-        page_payload.setdefault("page", page)
+        page_payload["page"] = page
         page_payload.setdefault("limit", 10)
-        data = fetch_page(api_url, page_payload, verify_ssl=verify_ssl, use_curl_fallback=use_curl_fallback)
+        data = fetch_page(api_url, page_payload, verify_ssl=verify_ssl, use_curl_fallback=use_curl_fallback, cookie=cookie)
         rows = extract_rows(data)
         if not rows:
             break
@@ -52,10 +54,13 @@ def fetch_shanghai_land_items(
     return results
 
 
-def debug_shanghai_response(api_url: str, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """返回上海接口原始响应摘要，用于判断是否缺payload、cookie或token。"""
+def debug_shanghai_response(
+    api_url: str,
+    payload: Optional[Dict[str, Any]] = None,
+    cookie: Optional[str] = None,
+) -> Dict[str, Any]:
     payload = payload or default_payload()
-    data = fetch_page(api_url, payload, verify_ssl=False, use_curl_fallback=True)
+    data = fetch_page(api_url, payload, verify_ssl=False, use_curl_fallback=True, cookie=cookie)
     raw_text = data.get("raw_text") if isinstance(data, dict) else None
     return {
         "keys": list(data.keys()) if isinstance(data, dict) else [],
@@ -69,12 +74,16 @@ def fetch_page(
     payload: Dict[str, Any],
     verify_ssl: bool = False,
     use_curl_fallback: bool = True,
+    cookie: Optional[str] = None,
 ) -> Dict[str, Any]:
+    headers = dict(HEADERS)
+    if cookie:
+        headers["Cookie"] = cookie
     try:
         response = requests.post(
             api_url,
             data=payload,
-            headers=HEADERS,
+            headers=headers,
             timeout=15,
             verify=verify_ssl,
         )
@@ -83,10 +92,10 @@ def fetch_page(
     except requests.exceptions.SSLError:
         if not use_curl_fallback:
             raise
-        return fetch_page_with_curl(api_url, payload)
+        return fetch_page_with_curl(api_url, payload, cookie=cookie)
 
 
-def fetch_page_with_curl(api_url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+def fetch_page_with_curl(api_url: str, payload: Dict[str, Any], cookie: Optional[str] = None) -> Dict[str, Any]:
     data = urlencode(payload)
     cmd = [
         "curl",
@@ -99,16 +108,28 @@ def fetch_page_with_curl(api_url: str, payload: Dict[str, Any]) -> Dict[str, Any
         "-H", f"Referer: {HEADERS['Referer']}",
         "-H", f"Origin: {HEADERS['Origin']}",
         "-H", f"Accept: {HEADERS['Accept']}",
+        "-H", f"Accept-Language: {HEADERS['Accept-Language']}",
         "-H", f"Content-Type: {HEADERS['Content-Type']}",
         "-H", f"X-Requested-With: {HEADERS['X-Requested-With']}",
-        "--data-raw", data,
     ]
+    if cookie:
+        cmd.extend(["-b", cookie])
+    cmd.extend(["--data-raw", data])
     completed = subprocess.run(cmd, capture_output=True, text=True, check=True)
     return safe_json_text(completed.stdout)
 
 
 def default_payload() -> Dict[str, Any]:
-    return {"page": 1, "limit": 10}
+    return {
+        "page": 1,
+        "limit": 10,
+        "busType": "转让地块",
+        "resultStartTime": "",
+        "resultEndTime": "",
+        "blockName": "",
+        "blockNoticeNo": "",
+        "resultName": "",
+    }
 
 
 def safe_json_text(text: str) -> Dict[str, Any]:
