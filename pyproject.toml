@@ -1,0 +1,10 @@
+[project]
+name = "codex"
+version = "0.1.0"
+description = "codex project"
+readme = "README.md"
+requires-python = ">=3.9"
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
