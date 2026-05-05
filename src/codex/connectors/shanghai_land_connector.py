@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
+import subprocess
 import warnings
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlencode
 
 import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
@@ -26,11 +29,11 @@ def fetch_shanghai_land_items(
     payload: Optional[Dict[str, Any]] = None,
     max_pages: int = 1,
     verify_ssl: bool = False,
+    use_curl_fallback: bool = True,
 ) -> List[Dict[str, Any]]:
     """抓取上海土地成交列表。
 
-    上海站点存在旧式TLS兼容问题，默认 verify_ssl=False 以便本地测试。
-    如生产环境运行，建议改用浏览器导出的CSV或单独配置兼容TLS环境。
+    上海站点存在旧式TLS兼容问题。requests 失败时可回退到系统 curl。
     """
     results: List[Dict[str, Any]] = []
     payload = payload or default_payload()
@@ -42,15 +45,7 @@ def fetch_shanghai_land_items(
         page_payload = dict(payload)
         page_payload.setdefault("page", page)
         page_payload.setdefault("limit", 10)
-        response = requests.post(
-            api_url,
-            data=page_payload,
-            headers=HEADERS,
-            timeout=15,
-            verify=verify_ssl,
-        )
-        response.raise_for_status()
-        data = safe_json(response)
+        data = fetch_page(api_url, page_payload, verify_ssl=verify_ssl, use_curl_fallback=use_curl_fallback)
         rows = extract_rows(data)
         if not rows:
             break
@@ -61,6 +56,49 @@ def fetch_shanghai_land_items(
     return results
 
 
+def fetch_page(
+    api_url: str,
+    payload: Dict[str, Any],
+    verify_ssl: bool = False,
+    use_curl_fallback: bool = True,
+) -> Dict[str, Any]:
+    try:
+        response = requests.post(
+            api_url,
+            data=payload,
+            headers=HEADERS,
+            timeout=15,
+            verify=verify_ssl,
+        )
+        response.raise_for_status()
+        return safe_json_text(response.text)
+    except requests.exceptions.SSLError:
+        if not use_curl_fallback:
+            raise
+        return fetch_page_with_curl(api_url, payload)
+
+
+def fetch_page_with_curl(api_url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    data = urlencode(payload)
+    cmd = [
+        "curl",
+        "-k",
+        "--silent",
+        "--show-error",
+        "--location",
+        api_url,
+        "-H", f"User-Agent: {HEADERS['User-Agent']}",
+        "-H", f"Referer: {HEADERS['Referer']}",
+        "-H", f"Origin: {HEADERS['Origin']}",
+        "-H", f"Accept: {HEADERS['Accept']}",
+        "-H", f"Content-Type: {HEADERS['Content-Type']}",
+        "-H", f"X-Requested-With: {HEADERS['X-Requested-With']}",
+        "--data-raw", data,
+    ]
+    completed = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    return safe_json_text(completed.stdout)
+
+
 def default_payload() -> Dict[str, Any]:
     return {
         "page": 1,
@@ -68,11 +106,11 @@ def default_payload() -> Dict[str, Any]:
     }
 
 
-def safe_json(response: requests.Response) -> Dict[str, Any]:
+def safe_json_text(text: str) -> Dict[str, Any]:
+    text = (text or "").strip()
     try:
-        return response.json()
+        return json.loads(text)
     except Exception:
-        text = response.text.strip()
         return {"raw_text": text}
 
 
