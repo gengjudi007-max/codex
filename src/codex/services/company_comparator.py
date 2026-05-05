@@ -6,52 +6,37 @@ CORE_METRICS = [
     "revenue_yoy",
     "net_profit",
     "net_profit_yoy",
+    "core_net_profit",
+    "core_net_profit_yoy",
+    "recurring_profit",
+    "recurring_profit_share",
     "land_acquisition_amount",
     "land_acquisition_gfa",
     "sales_amount",
     "sales_amount_yoy",
     "sales_area",
     "sales_area_yoy",
+    "financing_cost",
+    "net_gearing_ratio",
+    "operating_cash_flow",
 ]
 
 
 def compare_developers(companies: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """横向比较开发型房企经营表现。
-
-    输入建议：
-    {
-        "company": "保利发展",
-        "year": 2025,
-        "metrics": {
-            "revenue": 3000,
-            "revenue_yoy": -10,
-            "net_profit": 120,
-            "net_profit_yoy": 20,
-            "gross_margin": 18,
-            "impairment_loss": 30,
-            "land_acquisition_amount": 500,
-            "land_acquisition_gfa": 600,
-            "sales_amount": 3200,
-            "sales_amount_yoy": -15,
-            "sales_area": 1800,
-            "sales_area_yoy": -12,
-            "inventory_pressure": "medium",
-            "city_exposure": "core_city",
-            "debt_pressure": "low",
-        }
-    }
-    """
+    """横向比较开发型房企经营表现，并解释利润分化原因。"""
     normalized = [_normalize_company(company) for company in companies]
     rankings = _build_rankings(normalized)
     profit_groups = _group_by_profit_performance(normalized)
     divergence = _analyze_profit_divergence(normalized)
     development_logic = _analyze_development_business_logic(normalized)
+    company_explanations = _explain_company_profit_sources(normalized)
     storylines = _generate_storylines(normalized, profit_groups, divergence)
 
     return {
         "metrics_compared": CORE_METRICS,
         "rankings": rankings,
         "profit_groups": profit_groups,
+        "company_explanations": company_explanations,
         "profit_divergence_analysis": divergence,
         "development_business_analysis": development_logic,
         "storylines": storylines,
@@ -84,6 +69,7 @@ def _build_rankings(companies: List[Dict[str, Any]]) -> Dict[str, List[Dict[str,
 def _group_by_profit_performance(companies: List[Dict[str, Any]]) -> Dict[str, List[str]]:
     groups = {
         "profit_surge": [],
+        "profit_leader": [],
         "profit_stable": [],
         "profit_decline": [],
         "loss_making": [],
@@ -97,6 +83,8 @@ def _group_by_profit_performance(companies: List[Dict[str, Any]]) -> Dict[str, L
             groups["loss_making"].append(company["company"])
         elif net_profit_yoy is not None and net_profit_yoy >= 30:
             groups["profit_surge"].append(company["company"])
+        elif net_profit is not None and net_profit >= 100:
+            groups["profit_leader"].append(company["company"])
         elif net_profit_yoy is not None and net_profit_yoy <= -30:
             groups["profit_decline"].append(company["company"])
         else:
@@ -111,6 +99,10 @@ def _diagnose_company(metrics: Dict[str, Any]) -> List[str]:
     impairment_loss = _as_float(metrics.get("impairment_loss"))
     sales_amount_yoy = _as_float(metrics.get("sales_amount_yoy"))
     land_acquisition_amount = _as_float(metrics.get("land_acquisition_amount"))
+    recurring_profit_share = _as_float(metrics.get("recurring_profit_share"))
+    financing_cost = _as_float(metrics.get("financing_cost"))
+    net_gearing_ratio = _as_float(metrics.get("net_gearing_ratio"))
+    operating_cash_flow = _as_float(metrics.get("operating_cash_flow"))
     debt_pressure = metrics.get("debt_pressure")
     city_exposure = metrics.get("city_exposure")
     inventory_pressure = metrics.get("inventory_pressure")
@@ -119,6 +111,18 @@ def _diagnose_company(metrics: Dict[str, Any]) -> List[str]:
         diagnosis.append("毛利率相对较高，说明结算项目质量、土地成本或产品结构较好")
     elif gross_margin is not None and gross_margin < 15:
         diagnosis.append("毛利率偏低，可能受高价地结转、降价销售或低毛利项目集中交付影响")
+
+    if recurring_profit_share is not None and recurring_profit_share >= 30:
+        diagnosis.append("经常性利润占比较高，开发业务以外的经营性不动产、资管或物业服务正在提供利润安全垫")
+
+    if financing_cost is not None and financing_cost <= 3:
+        diagnosis.append("融资成本处于行业低位，有助于缓冲开发业务毛利率下行压力")
+
+    if net_gearing_ratio is not None and net_gearing_ratio <= 40:
+        diagnosis.append("净负债率较低，财务安全边际较强")
+
+    if operating_cash_flow is not None and operating_cash_flow > 0:
+        diagnosis.append("经营性现金流为正，回款和资金周转表现较稳健")
 
     if impairment_loss is not None and impairment_loss >= 30:
         diagnosis.append("减值规模较大，对当期利润形成明显侵蚀")
@@ -151,9 +155,38 @@ def _diagnose_company(metrics: Dict[str, Any]) -> List[str]:
     return diagnosis
 
 
+def _explain_company_profit_sources(companies: List[Dict[str, Any]]) -> Dict[str, List[str]]:
+    explanations: Dict[str, List[str]] = {}
+    for company in companies:
+        metrics = company["metrics"]
+        reasons = list(company["diagnosis"])
+
+        revenue = _as_float(metrics.get("revenue"))
+        net_profit = _as_float(metrics.get("net_profit"))
+        if revenue and net_profit is not None:
+            profit_margin = round(net_profit / revenue * 100, 2)
+            reasons.append(f"净利率约为{profit_margin}%，可用于观察销售规模与利润效率是否匹配")
+
+        recurring_profit = _as_float(metrics.get("recurring_profit"))
+        core_net_profit = _as_float(metrics.get("core_net_profit"))
+        if recurring_profit is not None and core_net_profit:
+            contribution = round(recurring_profit / core_net_profit * 100, 1)
+            reasons.append(f"经常性业务利润约占核心利润{contribution}%，说明利润来源不完全依赖开发结转")
+
+        land_amount = _as_float(metrics.get("land_acquisition_amount"))
+        sales_amount = _as_float(metrics.get("sales_amount"))
+        if land_amount is not None and sales_amount:
+            investment_intensity = round(land_amount / sales_amount * 100, 1)
+            reasons.append(f"拿地金额约为销售金额的{investment_intensity}%，可反映补仓力度和对后市判断")
+
+        explanations[company["company"]] = reasons
+    return explanations
+
+
 def _analyze_profit_divergence(companies: List[Dict[str, Any]]) -> List[str]:
     analysis = []
     profit_surge = []
+    profit_leader = []
     profit_decline_or_loss = []
 
     for company in companies:
@@ -162,8 +195,14 @@ def _analyze_profit_divergence(companies: List[Dict[str, Any]]) -> List[str]:
         net_profit_yoy = _as_float(metrics.get("net_profit_yoy"))
         if net_profit_yoy is not None and net_profit_yoy >= 30:
             profit_surge.append(company)
+        if net_profit is not None and net_profit >= 100:
+            profit_leader.append(company)
         if (net_profit_yoy is not None and net_profit_yoy <= -30) or (net_profit is not None and net_profit < 0):
             profit_decline_or_loss.append(company)
+
+    if profit_leader:
+        names = "、".join(company["company"] for company in profit_leader)
+        analysis.append(f"{names}净利润规模处于样本前列，说明其不只是规模型房企，更具备较强利润留存能力。")
 
     if profit_surge:
         names = "、".join(company["company"] for company in profit_surge)
@@ -173,8 +212,8 @@ def _analyze_profit_divergence(companies: List[Dict[str, Any]]) -> List[str]:
         names = "、".join(company["company"] for company in profit_decline_or_loss)
         analysis.append(f"{names}利润大幅下滑或亏损，需拆分销售下滑、毛利率下行、资产减值、融资成本和历史高价地包袱。")
 
-    analysis.append("在同样的外部环境中，利润分化的核心不只在市场冷热，而在土地成本、城市布局、产品去化、减值节奏、债务结构和结算周期的差异。")
-    analysis.append("净利润大增并不必然代表主业强修复，需要区分经营性改善与一次性收益；亏损也不一定只是销售差，可能是集中减值和历史项目结转造成。")
+    analysis.append("在同样的外部环境中，利润分化的核心不只在市场冷热，而在土地成本、城市布局、产品去化、减值节奏、债务结构、经常性业务占比和结算周期的差异。")
+    analysis.append("净利润大增或保持高位并不必然代表开发主业强修复，需要区分经营性改善、持有型资产贡献、一次性收益与低基数效应；亏损也不一定只是销售差，可能是集中减值和历史项目结转造成。")
     return analysis
 
 
@@ -183,6 +222,7 @@ def _analyze_development_business_logic(companies: List[Dict[str, Any]]) -> List
         "同样以开发业务为主，利润高低首先取决于结转项目的土地成本和售价差。高价地集中结转的企业，即便销售规模不低，也可能出现低毛利甚至亏损。",
         "城市布局决定去化质量。核心城市项目通常抗跌性更强，低能级城市项目在下行期更容易遭遇降价、库存和减值压力。",
         "财务结构影响利润韧性。债务压力高的企业需要承担更高融资成本，也更可能通过降价回款牺牲利润。",
+        "经常性业务决定利润安全垫。商业运营、租金、资管、物业服务等非开发业务占比越高，越能平滑开发结转波动。",
         "拿地节奏决定后续周期位置。前期激进扩张的企业可能在市场下行期承受高价地和库存包袱；谨慎补仓的企业短期规模可能下降，但利润质量更稳。",
         "利润表现还要区分会计利润与经营现金流。部分企业利润改善可能来自投资收益、减值减少或费用压降，但若销售和现金流未同步修复，持续性仍需观察。",
     ]
@@ -194,6 +234,14 @@ def _generate_storylines(
     divergence: List[str],
 ) -> List[Dict[str, Any]]:
     storylines = []
+
+    if profit_groups["profit_leader"]:
+        storylines.append({
+            "title": "利润前列房企的共同点：低融资成本、核心城市布局与经营性业务安全垫",
+            "angle": "以净利润规模为切口，拆解房企穿越周期的利润来源。",
+            "companies": profit_groups["profit_leader"],
+            "core_question": "这些利润来自开发主业修复，还是来自商业运营、资管和财务优势？",
+        })
 
     if profit_groups["profit_surge"] and (profit_groups["profit_decline"] or profit_groups["loss_making"]):
         storylines.append({
