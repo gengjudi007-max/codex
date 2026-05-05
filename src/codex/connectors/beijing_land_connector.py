@@ -1,63 +1,143 @@
 from __future__ import annotations
 
-import re
-from typing import Dict, List
+import time
+from typing import Any, Dict, List, Optional
 
 import requests
-from bs4 import BeautifulSoup
 
 
 BASE_URL = "https://yewu.ghzrzyw.beijing.gov.cn"
-LIST_URL = f"{BASE_URL}/gwxxfb/tdsc/tdzpgxm.html"
+API_URL = f"{BASE_URL}/gwxxfb/tdsc/esSearchList"
+SOURCE = "北京市规划和自然资源委员会"
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+    "Referer": f"{BASE_URL}/gwxxfb/tdsc/tdzpgxm.html",
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+    "X-Requested-With": "XMLHttpRequest",
+}
 
 
-def fetch_beijing_land_items(max_pages: int = 3) -> List[Dict]:
-    """抓取北京土地成交列表（简化版HTML解析）"""
-    results: List[Dict] = []
+def fetch_beijing_land_items(max_pages: int = 3, limit: int = 10) -> List[Dict[str, Any]]:
+    """通过北京规自委土地市场接口抓取土地成交/挂牌列表。"""
+    results: List[Dict[str, Any]] = []
 
     for page in range(1, max_pages + 1):
-        url = LIST_URL if page == 1 else f"{LIST_URL}?page={page}"
-        resp = requests.get(url, timeout=10)
-        resp.encoding = "utf-8"
-
-        soup = BeautifulSoup(resp.text, "html.parser")
-        table = soup.find("table")
-        if not table:
-            continue
-
-        rows = table.find_all("tr")
-        for tr in rows[1:]:
-            cols = [td.get_text(strip=True) for td in tr.find_all("td")]
-            if len(cols) < 5:
-                continue
-
-            item = parse_row(cols)
+        payload = fetch_beijing_land_page(page=page, limit=limit)
+        rows = extract_rows(payload)
+        if not rows:
+            break
+        for row in rows:
+            item = normalize_api_row(row)
             if item:
                 results.append(item)
-
     return results
 
 
-def parse_row(cols: List[str]) -> Dict:
-    """根据北京土地页面表格结构解析字段（需根据实际结构微调）"""
+def fetch_beijing_land_page(page: int = 1, limit: int = 10) -> Dict[str, Any]:
+    timestamp = int(time.time() * 1000)
+    params = {
+        "t": timestamp,
+        "page": page,
+        "limit": limit,
+        "landuse": "",
+        "type1": "",
+        "announcetype": "",
+        "county": "",
+        "gjz": "",
+        "_": timestamp + 1,
+    }
+    resp = requests.get(API_URL, params=params, headers=HEADERS, timeout=15)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def extract_rows(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """兼容常见接口返回结构。"""
+    for key in ["data", "rows", "list", "result"]:
+        value = payload.get(key)
+        if isinstance(value, list):
+            return value
+        if isinstance(value, dict):
+            for nested_key in ["data", "rows", "list", "records"]:
+                nested = value.get(nested_key)
+                if isinstance(nested, list):
+                    return nested
+    return []
+
+
+def normalize_api_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    land_name = pick(row, ["title", "landName", "zdmc", "xmmc", "name", "bt"])
+    district = pick(row, ["county", "district", "qx", "xzq", "qymc"])
+    land_use = pick(row, ["landuse", "landUse", "tdyt", "ghyt", "yt"])
+    status = pick(row, ["status", "jyzt", "zt", "announcetype", "gglx"])
+    date = pick(row, ["date", "cjsj", "jzsj", "fbsj", "pubdate", "createTime"])
+    url = build_detail_url(row)
+
+    metrics = {}
+    for key, aliases in {
+        "land_area": ["ydmj", "tdmj", "landArea", "area"],
+        "planned_gfa": ["jzmj", "ghjzmj", "buildingArea", "gfa"],
+        "land_amount": ["cjj", "cjje", "price", "amount"],
+        "floor_price": ["loudijia", "floorPrice", "cjlmj"],
+        "premium_rate": ["yjl", "premiumRate", "premium"],
+    }.items():
+        value = to_number(pick(row, aliases))
+        if value is not None:
+            metrics[key] = value
+
+    content_parts = []
+    if land_name:
+        content_parts.append(f"地块名称为{land_name}")
+    if district:
+        content_parts.append(f"所在区域为{district}")
+    if land_use:
+        content_parts.append(f"规划用途为{land_use}")
+    if status:
+        content_parts.append(f"交易状态为{status}")
+
+    return {
+        "category": "land",
+        "title": land_name or "北京土地市场项目",
+        "content": "，".join(content_parts) + "。" if content_parts else "北京土地市场项目。",
+        "city": "北京",
+        "date": date,
+        "source": SOURCE,
+        "source_level": "level_2",
+        "url": url,
+        "verified": True,
+        "metrics": metrics,
+        "raw": row,
+    }
+
+
+def build_detail_url(row: Dict[str, Any]) -> Optional[str]:
+    href = pick(row, ["url", "href", "link", "detailUrl"])
+    if href:
+        href = str(href)
+        if href.startswith("http"):
+            return href
+        return BASE_URL + href if href.startswith("/") else f"{BASE_URL}/{href}"
+    item_id = pick(row, ["id", "guid", "uuid", "objectid"])
+    if item_id:
+        return f"{BASE_URL}/gwxxfb/tdsc/{item_id}.html"
+    return None
+
+
+def pick(row: Dict[str, Any], keys: List[str]) -> Optional[Any]:
+    for key in keys:
+        if key in row and row[key] not in [None, ""]:
+            return row[key]
+    return None
+
+
+def to_number(value: Any) -> Optional[float]:
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip().replace(",", "").replace("%", "")
     try:
-        return {
-            "city": "北京",
-            "land_name": cols[0],
-            "district": cols[1] if len(cols) > 1 else None,
-            "land_use": cols[2] if len(cols) > 2 else None,
-            "transaction_status": cols[3] if len(cols) > 3 else None,
-            "transaction_date": extract_date(cols),
-            "raw_text": " | ".join(cols),
-            "source": "北京市规划和自然资源委员会",
-        }
-    except Exception:
-        return {}
-
-
-def extract_date(cols: List[str]) -> str:
-    for text in cols:
-        match = re.search(r"\d{4}-\d{2}-\d{2}", text)
-        if match:
-            return match.group(0)
-    return ""
+        return float(text)
+    except ValueError:
+        return None
