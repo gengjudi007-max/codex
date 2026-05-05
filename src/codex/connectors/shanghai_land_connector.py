@@ -31,10 +31,6 @@ def fetch_shanghai_land_items(
     verify_ssl: bool = False,
     use_curl_fallback: bool = True,
 ) -> List[Dict[str, Any]]:
-    """抓取上海土地成交列表。
-
-    上海站点存在旧式TLS兼容问题。requests 失败时可回退到系统 curl。
-    """
     results: List[Dict[str, Any]] = []
     payload = payload or default_payload()
 
@@ -54,6 +50,18 @@ def fetch_shanghai_land_items(
             if item:
                 results.append(item)
     return results
+
+
+def debug_shanghai_response(api_url: str, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """返回上海接口原始响应摘要，用于判断是否缺payload、cookie或token。"""
+    payload = payload or default_payload()
+    data = fetch_page(api_url, payload, verify_ssl=False, use_curl_fallback=True)
+    raw_text = data.get("raw_text") if isinstance(data, dict) else None
+    return {
+        "keys": list(data.keys()) if isinstance(data, dict) else [],
+        "row_count": len(extract_rows(data)) if isinstance(data, dict) else 0,
+        "raw_preview": (raw_text or json.dumps(data, ensure_ascii=False))[:1000],
+    }
 
 
 def fetch_page(
@@ -100,10 +108,7 @@ def fetch_page_with_curl(api_url: str, payload: Dict[str, Any]) -> Dict[str, Any
 
 
 def default_payload() -> Dict[str, Any]:
-    return {
-        "page": 1,
-        "limit": 10,
-    }
+    return {"page": 1, "limit": 10}
 
 
 def safe_json_text(text: str) -> Dict[str, Any]:
@@ -133,7 +138,6 @@ def normalize_row(row: Dict[str, Any]) -> Dict[str, Any]:
     land_use = pick(row, ["landuse", "landUse", "tdyt", "ghyt", "useType"])
     date = pick(row, ["date", "cjsj", "fbsj", "pubdate", "createTime", "dealTime"])
     buyer = pick(row, ["buyer", "jdr", "竞得人", "companyName", "winner"])
-
     metrics = {}
     for key, aliases in {
         "land_area": ["tdmj", "ydmj", "landArea", "area"],
@@ -145,7 +149,6 @@ def normalize_row(row: Dict[str, Any]) -> Dict[str, Any]:
         value = to_number(pick(row, aliases))
         if value is not None:
             metrics[key] = value
-
     content_parts = []
     if land_name:
         content_parts.append(f"地块名称为{land_name}")
@@ -155,7 +158,6 @@ def normalize_row(row: Dict[str, Any]) -> Dict[str, Any]:
         content_parts.append(f"规划用途为{land_use}")
     if buyer:
         content_parts.append(f"竞得方为{buyer}")
-
     return {
         "category": "land",
         "title": land_name or "上海土地成交项目",
