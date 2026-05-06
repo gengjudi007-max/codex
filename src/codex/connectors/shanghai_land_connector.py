@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import warnings
 from typing import Any, Dict, List, Optional
@@ -13,6 +14,7 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 BASE_URL = "https://biz.ghzyj.sh.gov.cn"
 SOURCE = "上海土地市场"
 REFERER = "https://biz.ghzyj.sh.gov.cn/shtdsc/jy/view/web/transaction/result/list_result_ywtb.html?tabIndex=1"
+TOKEN_URL = "https://biz.ghzyj.sh.gov.cn/shtdsc/jy/view/web/transaction/result/list_result_ywtb.html"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147 Safari/537.36",
@@ -25,6 +27,60 @@ HEADERS = {
 }
 
 
+def fetch_dynamic_token(use_curl: bool = True) -> Optional[str]:
+    """
+    从上海土地市场页面获取动态token (MmEwMD)
+    """
+    headers = dict(HEADERS)
+    headers.pop("Content-Type", None)
+    headers.pop("X-Requested-With", None)
+    
+    try:
+        if not use_curl:
+            warnings.simplefilter("ignore", InsecureRequestWarning)
+            response = requests.get(TOKEN_URL, headers=headers, timeout=15, verify=False)
+            response.raise_for_status()
+            html = response.text
+        else:
+            cmd = [
+                "curl",
+                "-k",
+                "--silent",
+                "--show-error",
+                "--location",
+                TOKEN_URL,
+                "-H", f"User-Agent: {HEADERS['User-Agent']}",
+                "-H", f"Referer: {HEADERS['Referer']}",
+                "-H", "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            ]
+            completed = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            html = completed.stdout
+        
+        # 尝试从HTML中提取token
+        # 可能的格式: <input type="hidden" id="MmEwMD" value="xxx" />
+        # 或者: var MmEwMD = "xxx";
+        patterns = [
+            r'id="MmEwMD"\s+value="([^"]+)"',
+            r'name="MmEwMD"\s+value="([^"]+)"',
+            r'MmEwMD\s*=\s*["\']([^"\']+)["\']',
+            r'"MmEwMD"\s*:\s*"([^"]+)"',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, html, re.IGNORECASE)
+            if match:
+                token = match.group(1)
+                if token and len(token) > 5:  # 简单验证token长度
+                    return token
+        
+        # 如果没找到，返回None
+        return None
+        
+    except Exception as e:
+        print(f"Warning: Failed to fetch dynamic token: {e}")
+        return None
+
+
 def fetch_shanghai_land_items(
     api_url: str,
     payload: Optional[Dict[str, Any]] = None,
@@ -32,9 +88,10 @@ def fetch_shanghai_land_items(
     verify_ssl: bool = False,
     use_curl_fallback: bool = True,
     cookie: Optional[str] = None,
+    auto_fetch_token: bool = True,
 ) -> List[Dict[str, Any]]:
     results: List[Dict[str, Any]] = []
-    payload = payload or default_payload()
+    payload = payload or default_payload(auto_fetch_token=auto_fetch_token)
 
     if not verify_ssl:
         warnings.simplefilter("ignore", InsecureRequestWarning)
@@ -58,14 +115,16 @@ def debug_shanghai_response(
     api_url: str,
     payload: Optional[Dict[str, Any]] = None,
     cookie: Optional[str] = None,
+    auto_fetch_token: bool = True,
 ) -> Dict[str, Any]:
-    payload = payload or default_payload()
+    payload = payload or default_payload(auto_fetch_token=auto_fetch_token)
     data = fetch_page(api_url, payload, verify_ssl=False, use_curl_fallback=True, cookie=cookie)
     raw_text = data.get("raw_text") if isinstance(data, dict) else None
     return {
         "keys": list(data.keys()) if isinstance(data, dict) else [],
         "row_count": len(extract_rows(data)) if isinstance(data, dict) else 0,
         "raw_preview": (raw_text or json.dumps(data, ensure_ascii=False))[:1000],
+        "payload_used": payload,
     }
 
 
@@ -119,8 +178,11 @@ def fetch_page_with_curl(api_url: str, payload: Dict[str, Any], cookie: Optional
     return safe_json_text(completed.stdout)
 
 
-def default_payload() -> Dict[str, Any]:
-    return {
+def default_payload(auto_fetch_token: bool = True) -> Dict[str, Any]:
+    """
+    生成默认payload，可选自动获取动态token
+    """
+    payload = {
         "page": 1,
         "limit": 10,
         "busType": "转让地块",
@@ -130,6 +192,14 @@ def default_payload() -> Dict[str, Any]:
         "blockNoticeNo": "",
         "resultName": "",
     }
+    
+    # 自动获取动态token
+    if auto_fetch_token:
+        token = fetch_dynamic_token(use_curl=True)
+        if token:
+            payload["MmEwMD"] = token
+    
+    return payload
 
 
 def safe_json_text(text: str) -> Dict[str, Any]:
