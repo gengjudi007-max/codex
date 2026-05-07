@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from codex.services.newsroom_orchestrator import run_newsroom_orchestrator
+from codex.services.reliability import log_event, safe_step, summarize_steps
 from codex.services.source_ingestion import ingest_sources
 
 DEFAULT_WATCHLIST_PATH = "config/watchlist.json"
@@ -14,7 +15,10 @@ DEFAULT_RUN_LOG_PATH = "data/run_logs/continuous_runner.jsonl"
 
 
 def run_once(config_path: str = DEFAULT_WATCHLIST_PATH) -> Dict[str, Any]:
+    log_event("continuous_runner", "run_once started", {"config_path": config_path})
+
     config = load_watchlist(config_path)
+
     ingestion_payload = {
         "sources": config.get("sources", []),
         "texts": config.get("texts", []),
@@ -24,22 +28,56 @@ def run_once(config_path: str = DEFAULT_WATCHLIST_PATH) -> Dict[str, Any]:
         "memory_path": config.get("memory_path", "data/memory_events.jsonl"),
         "timeout": config.get("timeout", 15),
     }
-    ingestion = ingest_sources(ingestion_payload)
+
+    steps: Dict[str, Dict[str, Any]] = {}
+
+    steps["ingestion"] = safe_step(
+        "ingestion",
+        lambda: ingest_sources(ingestion_payload),
+    )
+
+    ingestion = steps["ingestion"].get("result") or {}
+
     orchestrator_payload = {
         "items": ingestion.get("items", []),
         "memory_path": config.get("memory_path", "data/memory_events.jsonl"),
         "previous_policy": config.get("previous_policy", ""),
         "current_policy": config.get("current_policy", ""),
     }
-    orchestrator = run_newsroom_orchestrator(orchestrator_payload) if ingestion.get("items") else None
+
+    if ingestion.get("items"):
+        steps["orchestrator"] = safe_step(
+            "orchestrator",
+            lambda: run_newsroom_orchestrator(orchestrator_payload),
+        )
+    else:
+        steps["orchestrator"] = {
+            "name": "orchestrator",
+            "status": "skipped",
+            "result": None,
+            "reason": "no_items",
+        }
+
+    orchestrator = steps["orchestrator"].get("result")
+
     result = {
         "ran_at": datetime.now(timezone.utc).isoformat(),
         "config_path": config_path,
+        "steps": steps,
+        "summary": summarize_steps(steps),
         "ingestion": _compact_ingestion(ingestion),
         "orchestrator": _compact_orchestrator(orchestrator),
         "alerts": _alerts(ingestion, orchestrator),
     }
+
     append_run_log(result, config.get("run_log_path", DEFAULT_RUN_LOG_PATH))
+
+    log_event(
+        "continuous_runner",
+        "run_once finished",
+        {"summary": result["summary"]},
+    )
+
     return result
 
 
@@ -52,12 +90,26 @@ def run_loop(
     interval = int(interval_seconds or config.get("interval_seconds", 3600))
     runs = []
     count = 0
+
+    log_event(
+        "continuous_runner",
+        "run_loop started",
+        {"interval_seconds": interval, "max_runs": max_runs},
+    )
+
     while max_runs is None or count < max_runs:
         runs.append(run_once(config_path))
         count += 1
         if max_runs is not None and count >= max_runs:
             break
         time.sleep(interval)
+
+    log_event(
+        "continuous_runner",
+        "run_loop finished",
+        {"runs": len(runs)},
+    )
+
     return runs
 
 
