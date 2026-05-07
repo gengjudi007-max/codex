@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-简化版城市土地连接器
+简化版城市土地连接器（支持翻页）
 - 使用中国土地市场网作为统一数据源
 - 通过城市名过滤数据
-- 虽然每城市数据较少（1-3条），但能工作
-- 适合快速完成任务
+- 支持翻页，获取更多数据
+- 适合快速覆盖多个城市
 """
 import subprocess
 import re
@@ -16,14 +16,22 @@ class SimpleCityLandConnector:
     简化版城市土地连接器
     
     使用中国土地市场网的数据
-    适合快速覆盖多个城市
+    支持翻页，能获取更多数据
     """
     
     BASE_URL = "https://landchina.mnr.gov.cn/land/cjgs"
     CATEGORIES = ['xycr', 'hbgd', 'zbcr', 'gpcr', 'pmcr']
     
-    def __init__(self, city_name: str):
+    def __init__(self, city_name: str, max_pages: int = 5):
+        """
+        初始化连接器
+        
+        Args:
+            city_name: 城市名称（如 "成都"、"西安"）
+            max_pages: 每个分类最多翻几页（默认 5 页，每页 25 条）
+        """
         self.city_name = city_name
+        self.max_pages = max_pages
     
     def _fetch_html(self, url: str) -> Optional[str]:
         """使用curl获取HTML"""
@@ -45,7 +53,8 @@ class SimpleCityLandConnector:
         results = []
         
         # 正则：匹配列表项
-        pattern = r'<li>\s*<span>([^<]+)</span>\s*<a[^>]*href="([^"]+)"[^>]*>([^<]+)</a>'
+        # 格式：<li><span>日期</span><a href="...">标题</a></li>
+        pattern = r'<li[^>]*>\s*<span>([^<]+)</span>\s*<a[^>]*href="([^"]+)"[^>]*>([^<]+)</a>'
         matches = re.findall(pattern, html)
         
         for date, href, title in matches:
@@ -65,24 +74,41 @@ class SimpleCityLandConnector:
         return results
     
     def fetch_data(self, max_per_category: int = 5) -> List[Dict[str, Any]]:
-        """获取该城市的所有土地数据"""
-        print(f"\n🔍 获取 {self.city_name} 的土地数据...")
+        """获取该城市的所有土地数据（支持翻页）"""
+        print(f"\n🔍 获取 {self.city_name} 的土地数据（每分类翻 {self.max_pages} 页）...")
         
         all_data = []
         
         for cat in self.CATEGORIES:
-            url = f"{self.BASE_URL}/{cat}/"
             print(f"   检查分类: {cat}")
             
-            html = self._fetch_html(url)
-            if not html:
-                print(f"      ❌ 获取失败")
-                continue
+            category_data = []
             
-            data = self._parse_html(html)
-            print(f"      ✅ 找到 {len(data)} 条数据")
+            # 翻页：第1页是 index.htm，第2页是 index_1.htm，第3页是 index_2.htm...
+            for page in range(self.max_pages):
+                if page == 0:
+                    url = f"{self.BASE_URL}/{cat}/index.htm"
+                else:
+                    url = f"{self.BASE_URL}/{cat}/index_{page}.htm"
+                
+                html = self._fetch_html(url)
+                if not html:
+                    print(f"      ❌ 第 {page+1} 页获取失败")
+                    continue
+                
+                data = self._parse_html(html)
+                
+                if data:
+                    print(f"      第 {page+1} 页: 找到 {len(data)} 条包含 '{self.city_name}' 的数据")
+                    category_data.extend(data)
+                else:
+                    # 如果这一页没有该城市的数据，可能后面也没有了，停止翻页
+                    print(f"      第 {page+1} 页: 未找到包含 '{self.city_name}' 的数据")
+                    if page > 2:  # 如果已经翻了 2 页都没有，就停止
+                        break
             
-            all_data.extend(data)
+            print(f"   分类 {cat} 总计: {len(category_data)} 条")
+            all_data.extend(category_data)
         
         # 去重
         seen = set()
@@ -92,7 +118,7 @@ class SimpleCityLandConnector:
                 seen.add(item['url'])
                 unique_data.append(item)
         
-        print(f"   总计: {len(unique_data)} 条唯一数据")
+        print(f"   总计: {len(unique_data)} 条唯一数据（去重后）")
         
         return unique_data
     
