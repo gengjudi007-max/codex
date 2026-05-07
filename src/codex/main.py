@@ -1,44 +1,51 @@
-from codex.services.topic_finder import find_topics
-from codex.services.topic_scoring import score_topics
+from __future__ import annotations
+
+from typing import Any, Dict, List
+
+from codex.interaction import DEFAULT_ITEMS, run_topic_pipeline
+from codex.services.signal_monitor import monitor_signals
 
 
-def run_daily_topic_engine():
-    """每日自动选题主程序"""
-
-    input_data = {
-        "items": [
-            {
-                "source": "policy",
-                "title": "政治局会议提出努力稳定房地产市场",
-                "summary": "政策强调努力稳定房地产市场",
-            },
-            {
-                "source": "announcement",
-                "company": "保利发展",
-                "title": "保利发展净利润同比下降40%",
-                "summary": "利润下滑与减值增加",
-            },
-            {
-                "source": "land",
-                "city": "武汉",
-                "title": "武汉土拍城投占比超70%",
-                "summary": "土地市场仍依赖托底",
-            },
-        ]
+def run_daily_topic_engine(
+    items: List[Dict[str, Any]] | None = None,
+    *,
+    verbose: bool = True,
+) -> Dict[str, Any]:
+    """每日自动选题主程序。"""
+    items = items or DEFAULT_ITEMS
+    topic_pipeline = run_topic_pipeline(items)
+    signal_monitor = monitor_signals(items)
+    result = {
+        "topic_pipeline": topic_pipeline,
+        "signal_monitor": signal_monitor,
     }
 
-    topics = find_topics(input_data)
-    scored_topics = score_topics(topics)
+    if verbose:
+        _print_daily_report(topic_pipeline, signal_monitor)
 
+    return result
+
+
+def _print_daily_report(
+    topic_pipeline: Dict[str, Any],
+    signal_monitor: Dict[str, Any],
+) -> None:
     print("=== 今日房地产选题清单 ===")
+    print(topic_pipeline["message"])
 
-    for i, topic in enumerate(scored_topics, 1):
+    for i, topic in enumerate(topic_pipeline["topics"], 1):
         print(f"\n[{i}] {topic['topic']}")
         print("优先级:", topic["priority"])
         print("评分:", topic["final_score"])
+        print("核验状态:", topic["verification_status"], "| 置信度:", topic["confidence"])
         print("角度:", topic["angle"])
-        print("采访对象:", topic["interview_targets"])
-        print("问题:", topic["questions"])
+        print("必备材料:", "、".join(topic["material_plan"]["must_have"][:3]))
+        print("采访对象:", "、".join(topic["interview_targets"]))
+        print("问题:", "；".join(topic["questions"]))
+
+    print("\n=== 今日信号监测 ===")
+    for signal in signal_monitor["signals"][:5]:
+        print(f"- {signal['title']}｜{signal['priority']}｜{','.join(signal['domains'])}")
 
 
 if __name__ == "__main__":

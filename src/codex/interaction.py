@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Tuple
 
 from codex.services.annual_report_parser import parse_annual_reports
+from codex.services.bulk_importer import import_paths
 from codex.services.city_investment_land_model import build_city_investment_land_model
 from codex.services.city_land_comparator import compare_city_land_markets
 from codex.services.company_comparator import compare_developers
@@ -122,10 +123,14 @@ def analyze_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             return _error(error, mode)
         timeout = int(payload.get("timeout", 15))
         fetched = fetch_source_dicts(payload.get("sources", []), timeout=timeout)
+        store_result = None
+        if payload.get("store_path"):
+            store_result = append_jsonl(str(payload.get("store_path")), fetched)
         return {
             "mode": mode,
             "result": {
                 "fetched": fetched,
+                "store": store_result,
                 "topic_pipeline": run_topic_pipeline(fetched),
                 "signal_monitor": monitor_signals(fetched),
             },
@@ -160,6 +165,28 @@ def analyze_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             "result": {
                 "items": items,
                 "topic_pipeline": run_topic_pipeline(items),
+                "signal_monitor": monitor_signals(items),
+            },
+        }
+
+    if mode == "import_library":
+        ok, error = _require_list(payload, "paths")
+        if not ok:
+            return _error(error, mode)
+        output_path = str(payload.get("output_path") or "data/source_items.jsonl")
+        imported = import_paths(
+            payload.get("paths", []),
+            output_path=output_path,
+            source=str(payload.get("source") or "local_library"),
+            max_files=payload.get("max_files"),
+            per_file_timeout_seconds=int(payload.get("per_file_timeout_seconds", 20)),
+        )
+        items = load_jsonl(imported["output_path"])
+        return {
+            "mode": mode,
+            "result": {
+                **imported,
+                "store_summary": summarize_jsonl(imported["output_path"]),
                 "signal_monitor": monitor_signals(items),
             },
         }
@@ -284,6 +311,9 @@ def _infer_mode(payload: Dict[str, Any]) -> str:
         return "signal_monitor"
     if "sources" in payload:
         return "fetch_sources"
+    if "library_paths" in payload:
+        payload["paths"] = payload["library_paths"]
+        return "import_library"
     if "query" in payload and "path" in payload:
         return "search_store"
     if "path" in payload:

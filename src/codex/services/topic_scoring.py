@@ -20,11 +20,12 @@ def score_topics(topics: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         exclusivity_value = _score_exclusivity(topic)
 
         final_score = round(
-            base_score * 0.35
-            + news_value * 0.25
+            base_score * 0.30
+            + news_value * 0.20
+            + data_value * 0.15
             + impact_value * 0.20
             + interview_value * 0.10
-            + exclusivity_value * 0.10,
+            + exclusivity_value * 0.05,
             2,
         )
 

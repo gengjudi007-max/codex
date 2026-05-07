@@ -40,6 +40,15 @@ HTML = """<!doctype html>
       <button onclick="sendMessage()">生成选题</button>
       <button class="secondary" onclick="runSample()">运行样例</button>
     </div>
+    <section>
+      <p>公开信源采集 JSON</p>
+      <textarea id="sources" style="min-height: 110px;">[
+  {"name":"样例政策页","source_type":"policy","url":"https://example.com","parser":"plain_text"}
+]</textarea>
+      <div>
+        <button onclick="fetchSources()">采集信源</button>
+      </div>
+    </section>
     <section id="output"></section>
   </main>
   <script>
@@ -56,6 +65,16 @@ HTML = """<!doctype html>
     }
     async function runSample() {
       render(await post({}));
+    }
+    async function fetchSources() {
+      let sources;
+      try {
+        sources = JSON.parse(document.getElementById('sources').value);
+      } catch (error) {
+        document.getElementById('output').innerHTML = '<pre>JSON 格式错误：' + escapeHtml(error.message) + '</pre>';
+        return;
+      }
+      render(await post({mode: 'fetch_sources', sources}));
     }
     function render(data) {
       const output = document.getElementById('output');

@@ -39,6 +39,27 @@ class ServiceTests(unittest.TestCase):
 
         self.assertEqual(scored[0]["priority"], "重点选题")
         self.assertGreater(scored[0]["final_score"], 80)
+        self.assertIn("data_value", scored[0]["score_breakdown"])
+
+    def test_topic_scoring_counts_data_value_in_final_score(self):
+        topic = {
+            "topic": "测试选题",
+            "category": "物业服务",
+            "trigger": "物业项目调整",
+            "score": 60,
+            "interview_targets": [],
+            "questions": [],
+        }
+        topic_with_data = {
+            **topic,
+            "trigger": "物业项目调整，金额10亿元，占比20%",
+            "materials": ["项目清单", "金额口径"],
+        }
+
+        score_without_data = score_topics([topic])[0]["final_score"]
+        score_with_data = score_topics([topic_with_data])[0]["final_score"]
+
+        self.assertGreater(score_with_data, score_without_data)
 
     def test_material_builder_returns_verification_plan(self):
         topic = {
@@ -197,6 +218,23 @@ class ServiceTests(unittest.TestCase):
             self.assertEqual(summary["source_counts"]["draft"], 1)
             self.assertEqual(matches["matched"], 1)
             self.assertIn("杭州土地市场", matches["items"][0]["title"])
+
+    def test_source_store_search_paginates_matches(self):
+        with TemporaryDirectory() as tmpdir:
+            path = str(Path(tmpdir) / "items.jsonl")
+            write_jsonl(
+                path,
+                [
+                    {"source": "draft", "title": "杭州土地市场一", "summary": "民企回归"},
+                    {"source": "draft", "title": "杭州土地市场二", "summary": "溢价率回升"},
+                    {"source": "draft", "title": "杭州土地市场三", "summary": "城投减少"},
+                ],
+            )
+            matches = search_jsonl(path, "杭州", limit=1, offset=1)
+
+            self.assertEqual(matches["matched"], 3)
+            self.assertEqual(matches["returned"], 1)
+            self.assertIn("二", matches["items"][0]["title"])
 
     def test_ifind_client_normalizes_fake_sdk_result(self):
         class FakeSDK:

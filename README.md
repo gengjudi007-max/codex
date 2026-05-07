@@ -245,8 +245,43 @@ curl -X POST http://127.0.0.1:8765/api/interact \
 - `mode: "signal_monitor"` + `items`: 进入行业信息变化监测
 - `tracking: true` + `items`: 自动进入行业信息变化监测
 - `sources`: 抓取公开 URL 后，同时进入选题流水线和信号监测
+- `mode: "fetch_sources"` + `sources` + 可选 `store_path`: 采集公开网页/JSON 信源、抽取基础指标、进入选题与信号监测，并可写入 JSONL 资料库
+- `mode: "import_library"` + `paths` + `output_path`: 批量导入本地 TXT/HTML/PDF/DOCX/CSV/TSV/XLSX 资料并建立本地 JSONL 资料库
 - `mode: "search_store"` + `path` + `query`: 流式检索本地资料库
 - `mode: "store_summary"` + `path`: 统计资料库规模、文件类型和状态
+
+公开信源采集示例：
+
+```bash
+curl -X POST http://127.0.0.1:8765/api/interact \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "fetch_sources",
+    "store_path": "data/source_items.jsonl",
+    "sources": [
+      {
+        "name": "武汉自然资源公告",
+        "source_type": "land",
+        "url": "https://example.com/land-policy.html",
+        "parser": "plain_text"
+      }
+    ]
+  }'
+```
+
+本地资料库导入示例：
+
+```bash
+PYTHONPATH=src python - <<'PY'
+from codex.interaction import analyze_payload
+
+print(analyze_payload({
+    "mode": "import_library",
+    "paths": ["examples"],
+    "output_path": "data/source_items.jsonl"
+})["result"]["store_summary"])
+PY
+```
 
 年报示例：
 

@@ -4,7 +4,7 @@
 
 ## Core Flow
 
-1. Normalize raw input from free text, structured JSON, or public source fetching.
+1. Normalize raw input from free text, structured JSON, public source fetching, local documents, or terminal exports.
 2. Detect reporting topics and industry signals.
 3. Score topics by news value, impact, interviewability, and exclusivity.
 4. Attach credibility metadata:
@@ -28,6 +28,12 @@ Output statuses:
 ## Extension Points
 
 - Add source-specific parsers under `services/data_fetcher.py`.
+- Add local-library import handling under `services/bulk_importer.py`.
 - Add topic rules under `services/topic_finder.py`.
 - Add metric models under dedicated service modules.
 - Add tests before expanding rule coverage.
+
+## Collection Interfaces
+
+- `fetch_sources` accepts public URL source definitions, extracts readable text and basic metrics, and sends the collected items through topic discovery and signal monitoring. When `store_path` is provided, collected items are appended to a JSONL source store.
+- `import_library` accepts local files or folders, imports supported document and spreadsheet formats, writes a deduplicated JSONL source store, and returns store statistics plus signal monitoring output.

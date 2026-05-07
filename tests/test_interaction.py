@@ -1,8 +1,10 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from codex.interaction import analyze_payload
+from codex.main import run_daily_topic_engine
 from codex.services.source_store import write_jsonl
 
 
@@ -103,6 +105,53 @@ class InteractionTests(unittest.TestCase):
         self.assertEqual(len(response["result"]["items"]), 1)
         self.assertTrue(response["result"]["signal_monitor"]["signals"])
 
+    def test_fetch_sources_runs_pipeline_and_can_store_items(self):
+        class FakeResponse:
+            text = "武汉土地市场成交金额超过10亿元，城投拿地占比70%。"
+
+            def raise_for_status(self):
+                return None
+
+        with TemporaryDirectory() as tmpdir:
+            store_path = str(Path(tmpdir) / "sources.jsonl")
+            with patch("codex.services.data_fetcher.requests") as fake_requests:
+                fake_requests.get.return_value = FakeResponse()
+                response = analyze_payload(
+                    {
+                        "mode": "fetch_sources",
+                        "sources": [
+                            {
+                                "name": "武汉自然资源公告",
+                                "source_type": "land",
+                                "url": "https://www.mohurd.gov.cn/sample.html",
+                            }
+                        ],
+                        "store_path": store_path,
+                    }
+                )
+
+        self.assertEqual(response["mode"], "fetch_sources")
+        self.assertEqual(response["result"]["fetched"][0]["status"], "ok")
+        self.assertEqual(response["result"]["store"]["written"], 1)
+        self.assertGreaterEqual(response["result"]["topic_pipeline"]["topic_count"], 1)
+
+    def test_import_library_mode_indexes_local_documents(self):
+        path = Path(__file__).resolve().parents[1] / "examples" / "sample_policy.txt"
+        with TemporaryDirectory() as tmpdir:
+            output_path = str(Path(tmpdir) / "library.jsonl")
+            response = analyze_payload(
+                {
+                    "mode": "import_library",
+                    "paths": [str(path)],
+                    "output_path": output_path,
+                }
+            )
+
+        self.assertEqual(response["mode"], "import_library")
+        self.assertEqual(response["result"]["written"], 1)
+        self.assertEqual(response["result"]["store_summary"]["total"], 1)
+        self.assertTrue(response["result"]["signal_monitor"]["signals"])
+
     def test_ifind_query_without_sdk_returns_clear_error(self):
         response = analyze_payload({
             "mode": "ifind_query",
@@ -132,6 +181,26 @@ class InteractionTests(unittest.TestCase):
         self.assertEqual(inferred_search["mode"], "search_store")
         self.assertEqual(inferred_search["result"]["matched"], 1)
         self.assertEqual(summary["result"]["total"], 2)
+
+    def test_daily_topic_engine_reuses_full_automation_pipeline(self):
+        result = run_daily_topic_engine(
+            [
+                {
+                    "source": "land",
+                    "city": "武汉",
+                    "title": "武汉土拍城投拿地占比超过70%",
+                    "summary": "多宗地块底价成交，地方平台继续托底土地市场。",
+                }
+            ],
+            verbose=False,
+        )
+
+        topic = result["topic_pipeline"]["topics"][0]
+        self.assertIn("material_plan", topic)
+        self.assertIn("interview_plan", topic)
+        self.assertIn("photo_plan", topic)
+        self.assertIn("verification_status", topic)
+        self.assertTrue(result["signal_monitor"]["signals"])
 
 
 if __name__ == "__main__":
