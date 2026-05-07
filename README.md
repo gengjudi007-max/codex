@@ -92,7 +92,7 @@ codex/
 │       │   ├── source_store.py   # JSONL 资料库存储、统计和流式检索
 │       │   ├── bulk_importer.py  # 本地文件夹批量导入
 │       │   └── text_utils.py     # 文本清洗和城市/公司识别
-├── financial_data_connector.py  # 金融数据连接器（东方财富、巨潮、国家统计局）
+├── financial_data_connector.py  # 金融数据连接器（东方财富：财务数据+公告数据；巨潮：公告数据；国家统计局：宏观数据）
 ├── exchange_connector.py        # 交易所数据连接器（上交所、深交所、港交所）
 ├── automation_pipeline.py       # 自动化流程管道
 ├── task_queue.py               # 持久化任务队列

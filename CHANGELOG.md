@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+- ✅ 打通东方财富公告数据接口（使用真实 API）
+- ✅ 添加 `fetch_announcements()` 方法到 `EastmoneyConnector`
+- ✅ 使用 API：`https://np-anotice-stock.eastmoney.com/api/security/ann`
+- ✅ 可获取公告：标题、时间、类别、URL、股票代码、股票名称
+- ✅ 支持按股票代码过滤，或获取最新全部公告
+- ✅ 现在 `EastmoneyConnector` 可获取：财务数据 + 公告数据
+- ✅ 测试通过：成功获取万科A的公告数据
+
 ## 0.2.0
 
 - 打通东方财富财务数据接口（使用真实 API）
