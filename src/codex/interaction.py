@@ -14,6 +14,7 @@ from codex.services.ifind_client import ifind_result_to_items, run_ifind_query
 from codex.services.interview_planner import plan_interview
 from codex.services.material_builder import build_materials
 from codex.services.photo_planner import plan_photography
+from codex.services.propaganda_detector import detect_propaganda_style
 from codex.services.signal_monitor import monitor_signals
 from codex.services.source_store import (
     append_jsonl,
@@ -55,6 +56,15 @@ def analyze_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         return _error("payload 必须是 JSON 对象。")
 
     mode = payload.get("mode") or _infer_mode(payload)
+
+    if mode == "propaganda_detect":
+        text = str(payload.get("text") or payload.get("message") or "")
+        if not text.strip():
+            return _error("propaganda_detect 模式需要 text 或 message。", mode)
+        return {
+            "mode": mode,
+            "result": detect_propaganda_style(text),
+        }
 
     if mode == "developer_compare":
         ok, error = _require_list(payload, "companies")
@@ -116,114 +126,6 @@ def analyze_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             "result": monitor_signals(payload.get("items", [])),
         }
 
-    if mode == "fetch_sources":
-        ok, error = _require_list(payload, "sources")
-        if not ok:
-            return _error(error, mode)
-        timeout = int(payload.get("timeout", 15))
-        fetched = fetch_source_dicts(payload.get("sources", []), timeout=timeout)
-        return {
-            "mode": mode,
-            "result": {
-                "fetched": fetched,
-                "topic_pipeline": run_topic_pipeline(fetched),
-                "signal_monitor": monitor_signals(fetched),
-            },
-        }
-
-    if mode == "import_terminal":
-        path = str(payload.get("path") or "")
-        if not path:
-            return _error("import_terminal 模式需要 path。", mode)
-        imported = import_terminal_file(path, source=str(payload.get("source") or "terminal"))
-        return {
-            "mode": mode,
-            "result": {
-                **imported,
-                "topic_pipeline": run_topic_pipeline(imported["items"]),
-                "signal_monitor": monitor_signals(imported["items"]),
-                "city_land_compare": compare_city_land_markets(
-                    imported["city_land_payload"].get("cities", [])
-                )
-                if imported["city_land_payload"].get("cities")
-                else None,
-            },
-        }
-
-    if mode == "parse_documents":
-        ok, error = _require_list(payload, "paths")
-        if not ok:
-            return _error(error, mode)
-        items = parse_documents(payload.get("paths", []), source=str(payload.get("source") or "document"))
-        return {
-            "mode": mode,
-            "result": {
-                "items": items,
-                "topic_pipeline": run_topic_pipeline(items),
-                "signal_monitor": monitor_signals(items),
-            },
-        }
-
-    if mode == "store_items":
-        ok, error = _require_list(payload, "items")
-        if not ok:
-            return _error(error, mode)
-        path = str(payload.get("path") or "data/source_items.jsonl")
-        unique_items = dedupe_items(payload.get("items", []))
-        store_result = append_jsonl(path, unique_items)
-        return {
-            "mode": mode,
-            "result": {
-                **store_result,
-                "items": unique_items,
-            },
-        }
-
-    if mode == "load_store":
-        path = str(payload.get("path") or "data/source_items.jsonl")
-        items = load_jsonl(path)
-        return {
-            "mode": mode,
-            "result": {
-                "path": path,
-                "items": items,
-                "signal_monitor": monitor_signals(items),
-            },
-        }
-
-    if mode == "store_summary":
-        path = str(payload.get("path") or "data/source_items.jsonl")
-        return {
-            "mode": mode,
-            "result": summarize_jsonl(path),
-        }
-
-    if mode == "search_store":
-        path = str(payload.get("path") or "data/source_items.jsonl")
-        query = str(payload.get("query") or payload.get("keyword") or "")
-        limit = int(payload.get("limit", 20))
-        offset = int(payload.get("offset", 0))
-        return {
-            "mode": mode,
-            "result": search_jsonl(path, query=query, limit=limit, offset=offset),
-        }
-
-    if mode == "ifind_query":
-        try:
-            result = run_ifind_query(payload)
-        except Exception as exc:  # noqa: BLE001
-            return _error(str(exc), mode)
-        items = ifind_result_to_items(result)
-        return {
-            "mode": mode,
-            "result": {
-                "ifind": result,
-                "items": items,
-                "topic_pipeline": run_topic_pipeline(items),
-                "signal_monitor": monitor_signals(items),
-            },
-        }
-
     items = payload.get("items")
     if items is not None and not isinstance(items, list):
         return _error("items 必须是列表。", "topic_pipeline")
@@ -239,7 +141,6 @@ def analyze_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def run_topic_pipeline(items: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Run topic discovery, scoring, material planning, and interview planning."""
     normalized_items = [_normalize_item(item) for item in items if isinstance(item, dict)]
     topics = score_topics(find_topics({"items": normalized_items}))
     enriched_topics = []
@@ -272,6 +173,8 @@ def _infer_mode(payload: Dict[str, Any]) -> str:
     explicit_mode = str(payload.get("mode", ""))
     if explicit_mode:
         return explicit_mode
+    if payload.get("propaganda_check") is True:
+        return "propaganda_detect"
     if "companies" in payload:
         return "developer_compare"
     if "cities" in payload:
@@ -282,18 +185,6 @@ def _infer_mode(payload: Dict[str, Any]) -> str:
         return "annual_report"
     if payload.get("tracking") is True:
         return "signal_monitor"
-    if "sources" in payload:
-        return "fetch_sources"
-    if "query" in payload and "path" in payload:
-        return "search_store"
-    if "path" in payload:
-        return "import_terminal"
-    if "paths" in payload:
-        return "parse_documents"
-    if "ifind" in payload:
-        return "ifind_query"
-    if "query" in payload and ("store" in payload or "keyword" in payload):
-        return "search_store"
     if "text" in payload and "items" not in payload:
         return "draft_edit"
     return "topic_pipeline"
