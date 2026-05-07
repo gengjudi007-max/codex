@@ -20,11 +20,16 @@ dev = [
   "ruff>=0.5.0",
 ]
 
+desktop = [
+  "pyinstaller>=6.0.0",
+]
+
 [project.scripts]
 codex = "codex.cli:main"
 codex-daily = "codex.main:run_daily_topic_engine"
 codex-interactive = "codex.interactive:main"
 codex-server = "codex.server:main"
+codex-desktop = "codex.desktop_app:main"
 
 [build-system]
 requires = ["setuptools", "wheel"]
