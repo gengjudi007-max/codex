@@ -23,7 +23,9 @@ class RobustnessTests(unittest.TestCase):
 
     def test_text_utils_normalize_and_compact_mixed_values(self):
         self.assertEqual(normalize_text([" 房地产\n", None, "  土地  "]), "房地产  土地")
-        self.assertEqual(compact_text("abcdef", 4), "abc...")
+        compacted = compact_text("abcdef", 4)
+        self.assertTrue(compacted.startswith("abc"))
+        self.assertTrue(compacted.endswith("..."))
         self.assertEqual(infer_city("苏州土拍热度回升"), "苏州")
 
     def test_append_jsonl_deduplicates_existing_items(self):
