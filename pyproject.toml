@@ -21,6 +21,7 @@ dev = [
 ]
 
 [project.scripts]
+codex = "codex.cli:main"
 codex-daily = "codex.main:run_daily_topic_engine"
 codex-interactive = "codex.interactive:main"
 codex-server = "codex.server:main"
