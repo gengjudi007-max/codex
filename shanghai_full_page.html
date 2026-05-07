@@ -1,0 +1,270 @@
+<!DOCTYPE html><html><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <link rel="icon" href="/shtdsc/jy/web/images/favicon.ico" mce_href="/shtdsc/jy/web/images/favicon.ico" type="image/x-icon">
+    <title>土地交易-交易结果</title>
+    <base href="/shtdsc/jy/">
+    
+    <link id="baseCssPc" href="/shtdsc/jy/web/css/stylePC.css" rel="stylesheet" type="text/css">
+    <!--[if lt IE 9]><script r='m'>document.createElement("section")</script><![endif]--><script src="/shtdsc/jy/web/js/jquery.min.js" type="text/javascript"></script>
+    <script src="/shtdsc/jy/web/js/jquery.form.min.js" type="text/javascript"></script>
+    <script src="/shtdsc/jy/web/js/myJs.js" type="text/javascript"></script>
+    <script src="/shtdsc/jy/web/js/config.js" type="text/javascript"></script>
+    <script type="text/javascript" language="javascript">
+        $(function (){
+            setInterval(() => {
+                var height = $(".v-shell").height();
+                window.parent.postMessage(height, "*");
+            }, 1000);
+            // ****** 判断平台 ****** //
+            if(isPC()){
+                $("#baseCssMobile").remove();
+                // 通知公告轮播
+                autoScrollText("#autoNotice");
+            }else{
+                $("#baseCssPc").remove();
+                // 调用 Mobile css
+                //$("#baseCss").attr("href", "/css/styleMobile.css");
+                // 导航操作
+                menuCtrl();
+            }
+            // ****** 公共事件 ****** //
+            // 轮播
+            autoScrollBanner("#bannerBox");
+            // 选项卡
+            tabsCtrl("#tabsBar1","#tabsContent1");
+            tabsCtrl("#tabsBar2","#tabsContent2");
+            tabsCtrl("#tabsBar3","#tabsContent3");
+            tabsCtrl("#tabsBar4","#tabsContent4");
+            // 选项卡
+            tabsCtrl("#tabsBar","#tabsContent");
+
+            // 弹框
+            dialogClose();
+
+        });
+    </script>
+</head>
+
+<body>
+<style>
+    .customHeader_iframe {
+        width: 100%;
+        border: none;
+        overflow: hidden;
+        height: 140px;
+    }
+    .customFooter_iframe {
+        width: 100%;
+        border: none;
+        overflow: hidden;
+        height: 193px;
+    }
+</style>
+    <div class="v-shell">
+        <iframe class="customHeader_iframe" scrolling="no" src="https://zwdt.sh.gov.cn/zwdtSW/dphead/head/head.jsp?name=SHGHSH"></iframe>
+        <div class="v-body">
+            <div class="v-old-card-list">
+                <div class="v-card-list-body">
+                    <script>
+
+    var busType = "出让地块";
+    var tabIndex = 0;
+    let limit = 10;
+    var queryParams = {
+        page: 1,
+        limit: limit
+    }
+
+    function load(){
+        //tabIndex = $("#tabIndex").val();
+        // if(window.location.href.indexOf("?tabIndex=") > 0){
+        //     tabIndex = window.location.href.split('?tabIndex=')[1];
+        // } else {
+        //
+        // }
+
+        let paneTabsSelect = sessionStorage.getItem("paneTabsSelect");
+        let changeIndex = sessionStorage.getItem("changeIndex");
+
+        if(paneTabsSelect == null && changeIndex == null){//从更多进入list
+            tabIndex = $("#tabIndex").val();
+            sessionStorage.setItem("paneTabsSelect",tabIndex);
+        }else if(paneTabsSelect != null && changeIndex == null){//list列表没有点tab
+            tabIndex = $("#tabIndex").val();
+        }else{
+            tabIndex = changeIndex;
+        }
+
+        if(tabIndex) {
+            tabIndex = parseInt(tabIndex);
+        }else {
+            tabIndex = 0;
+        }
+        $("#tabsBar").children().each(function () {
+            $(this).removeClass("active");
+        })
+        $("#tabsBar li").eq(tabIndex).addClass("active");
+
+        queryTradeResultForPage();
+        sessionStorage.removeItem("changeIndex");
+
+    }
+    setTimeout(load, 20);
+
+    /**
+     * tab点击
+     * @author wonders
+     * @param null
+     * date 2022-08-05 15:53
+     * @return null
+     */
+    $("#tabsBar").on("click","li",function(){
+// resultTrade = $(this).context.innerText;
+        if(tabIndex != $("#tabsBar li").index(this)) {
+            tabIndex = $("#tabsBar li").index(this);
+            sessionStorage.setItem("changeIndex",tabIndex);
+            sessionStorage.removeItem("paneTabsSelect");
+            cleanQueryDiv();
+            queryParams.limit = limit;
+            queryParams.page = 1;
+            queryTradeResultForPage();
+        }
+    });
+
+    /**
+     * 清空查询条件
+     * @author wonders
+     * @param null
+     * date 2022-08-12 14:50
+     * @return null
+     */
+    function cleanQueryDiv() {
+        $("#startTime").val("");
+        $("#endTime").val("");
+        $("#blockName").val("");
+        $("#blockNoticeNo").val("");
+        $("#resultName").val("");
+    }
+
+    /**
+     * 查询
+     * @author wonders
+     * @param null
+     * date 2022-08-05 15:53
+     * @return null
+     */
+    let currentPage, totalPage;
+    function queryTradeResultForPage(params){
+        if(!params) {
+            converBusType();
+            dealQueryParams();
+            params = queryParams;
+        }
+        $.ajax({
+            url:"api/result/listForPage",
+            data: params,
+            type:'post',
+            cache: false,
+            success:function(result){
+                $("#list_data").html(result);
+                // //隐藏某些元素
+                if(tabIndex == 0 || tabIndex == 1 || tabIndex == 2) {
+                    $("#list_result_query_div").show();
+                    $("#list_result_query_resultname").hide();
+                    $("#list_result_query_starttime").hide();
+                    $("#list_result_query_endtime").hide();
+                }else if(tabIndex == 4 || tabIndex == 5) {
+                    $("#list_result_query_div").hide();
+                }else {
+                    $("#list_result_query_div").show();
+                    $("#list_result_query_resultname").show();
+                    $("#list_result_query_starttime").show();
+                    $("#list_result_query_endtime").show();
+                }
+                currentPage = $("#currentPage").val();
+                totalPage = $("#totalPage").val();
+                if(currentPage) {
+                    currentPage = parseInt(currentPage);
+                }
+                if(totalPage) {
+                    totalPage = parseInt(totalPage);
+                }
+                pageInit({
+                    index : currentPage // 当前页 默认1
+                    ,size : queryParams.limit // 一页显示多少行
+                    ,totalPage : totalPage // 总行数
+                    ,reloadFn : fnLoadData // 加载数据回调函数
+                })
+            }
+        });
+    }
+
+    /**
+     * 处理查询条件
+     * @author wonders
+     * @param null
+     * date 2022-08-09 14:27
+     * @return null
+     */
+    function dealQueryParams() {
+        let startTime = $("#startTime").val();
+        let endTime = $("#endTime").val();
+        let blockName = $("#blockName").val();
+        let blockNoticeNo = $("#blockNoticeNo").val();
+        let resultName = $("#resultName").val();
+        queryParams.busType = busType;
+        queryParams.resultStartTime = startTime;
+        queryParams.resultEndTime = endTime;
+        queryParams.blockName = blockName;
+        queryParams.blockNoticeNo = blockNoticeNo;
+        queryParams.resultName = resultName;
+    }
+
+    /**
+     * 根据选择的tab，设置不同的查询业务
+     * @author wonders
+     * @param null
+     * date 2022-08-05 15:29
+     * @return null
+     */
+    function converBusType(){
+        switch (tabIndex) {
+            case 0:
+                busType = "出让地块";
+                break;
+            case 1:
+                busType = "转让地块";
+                break;
+            case 2:
+                busType = "预申请地块";
+                break;
+            case 3:
+                busType = "标准地地块";
+                break;
+            // case 4:
+            //     busType = "先租后让地块";
+            //     break;
+            case 4:
+            // case 5:
+                busType = "集体土地出让地块";
+                break;
+            default:
+                busType = "";
+                break;
+        }
+    }
+    let wzUrl = "https://biz.ghzyj.sh.gov.cn/shtdsc/wz/zhym.jhtml?reUrl=";
+    let jyUrl = "https://biz.ghzyj.sh.gov.cn/shtdsc/jy/";
+
+    function jumpR(appId){
+        window.open(wzUrl + jyUrl + "api/result/info/" + appId + "?currentLoc=" + encodeURI("交易结果") + "&title=" + encodeURI("土地交易 - 上海土地市场"));
+    }
+</script>
+                    <div id="tabsContent" class="v-tabs-content">
+                        <div class="v-tabs-pane active" id="id_list_result_content">
+                            <div class="v-search-form rows" id="list_result_query_div">
+                                <ul>
+                                    <li id="list_result_query_blockname">
+                                        <h5>地块名称：</h5>
+                                        </li></ul></div></div></div></div></div></div></div></body></html>

@@ -102,10 +102,10 @@ class SimpleCityLandConnector:
                     print(f"      第 {page+1} 页: 找到 {len(data)} 条包含 '{self.city_name}' 的数据")
                     category_data.extend(data)
                 else:
-                    # 如果这一页没有该城市的数据，可能后面也没有了，停止翻页
                     print(f"      第 {page+1} 页: 未找到包含 '{self.city_name}' 的数据")
-                    if page > 2:  # 如果已经翻了 2 页都没有，就停止
-                        break
+                    # 注释掉提前停止的逻辑，让它翻完所有页
+                    # if page > 2:  # 如果已经翻了 2 页都没有，就停止
+                    #     break
             
             print(f"   分类 {cat} 总计: {len(category_data)} 条")
             all_data.extend(category_data)

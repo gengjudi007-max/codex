@@ -2,6 +2,9 @@
 """
 全国土地市场网数据连接器 (api.landchina.com)
 统一获取所有城市的土地数据
+
+注意：该API需要在请求头中包含动态生成的 'hash' 字段
+      由于反爬虫机制，建议使用 Playwright 来获取数据
 """
 import requests
 import json
