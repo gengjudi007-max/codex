@@ -4,13 +4,14 @@
 获取房地产上市公司的财务数据、公告、经营指标
 支持数据源：
 1. 巨潮资讯（CNINFO）- 公告数据
-2. 东方财富（Eastmoney）- 财务数据
+2. 东方财富（Eastmoney）- 财务数据、公告数据
 3. 国家统计局 - 宏观数据
 """
 
 import json
 import urllib.request
 import urllib.parse
+import requests  # 添加 requests 模块
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 
@@ -244,6 +245,136 @@ class EastmoneyConnector:
             import traceback
             traceback.print_exc()
             return {}
+    
+    def fetch_announcements(self, stock_code: str = '', keyword: str = '', 
+                          max_pages: int = 3) -> List[Dict[str, Any]]:
+        """
+        获取上市公司公告（使用东方财富真实 API）
+        
+        Args:
+            stock_code: 股票代码（如 '000002' 为万科A）
+            keyword: 搜索关键词（如 '房地产'、'土地' 等）
+            max_pages: 最大获取页数
+        
+        Returns:
+            公告列表
+        """
+        print(f"  📋 获取公告数据（真实 API）...")
+        if stock_code:
+            print(f"     股票代码：{stock_code}")
+        if keyword:
+            print(f"     关键词：{keyword}")
+        
+        announcements = []
+        
+        try:
+            # API URL
+            api_url = "https://np-anotice-stock.eastmoney.com/api/security/ann"
+            
+            # 构造股票代码参数
+            stock_param = stock_code if stock_code else ''
+            
+            # 分页获取
+            for page in range(1, max_pages + 1):
+                print(f"    📄 获取第 {page} 页...")
+                
+                params = {
+                    'sr': '-1',  # 排序：倒序（最新优先）
+                    'page_size': '10',  # 每页10条
+                    'page_index': str(page),
+                    'ann_type': 'A',  # 公告类型：A=所有
+                    'client_source': 'web',
+                    'stock_list': stock_param,
+                }
+                
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+                    'Referer': 'https://data.eastmoney.com/notices/stock/list.html'
+                }
+                
+                response = requests.get(api_url, params=params, headers=headers, timeout=10)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    
+                    if result.get('data') and result['data'].get('list'):
+                        page_data = result['data']['list']
+                        print(f"      ✅ 本页获取 {len(page_data)} 条公告")
+                        
+                        # 解析公告数据
+                        for item in page_data:
+                            # 提取公告信息
+                            ann = {
+                                'title': item.get('title', ''),
+                                'content': item.get('summary', ''),  # 摘要
+                                'stock_code': stock_code or self._extract_stock_code(item),
+                                'stock_name': self._extract_stock_name(item),
+                                'announcement_time': item.get('display_time', ''),
+                                'url': self._build_announcement_url(item.get('art_code', '')),
+                                'category': self._extract_column_name(item),
+                                'source': '东方财富',
+                                'city': '',
+                                'date': item.get('display_time', '')[:10] if item.get('display_time') else '',
+                            }
+                            
+                            # 如果指定了关键词，进行过滤
+                            if keyword:
+                                if keyword.lower() in ann['title'].lower() or \
+                                   keyword.lower() in ann['content'].lower():
+                                    announcements.append(ann)
+                            else:
+                                announcements.append(ann)
+                        else:
+                            print(f"     ⚠️  本页无数据")
+                            break
+                else:
+                    print(f"     ❌ API 调用失败：{response.status_code}")
+                    break
+            
+            print(f"  ✅ 获取完成：共 {len(announcements)} 条公告")
+            return announcements
+        
+        except Exception as e:
+            print(f"  ❌ 获取公告失败：{e}")
+            import traceback
+            traceback.print_exc()
+            return []
+    
+    def _extract_stock_code(self, item: Dict) -> str:
+        """从 API 返回数据中提取股票代码"""
+        try:
+            codes = item.get('codes', [])
+            if codes and len(codes) > 0:
+                return codes[0].get('stock_code', '')
+        except:
+            pass
+        return ''
+    
+    def _extract_stock_name(self, item: Dict) -> str:
+        """从 API 返回数据中提取股票名称"""
+        try:
+            codes = item.get('codes', [])
+            if codes and len(codes) > 0:
+                return codes[0].get('short_name', '')
+        except:
+            pass
+        return ''
+    
+    def _extract_column_name(self, item: Dict) -> str:
+        """从 API 返回数据中提取公告类别"""
+        try:
+            columns = item.get('columns', [])
+            if columns and len(columns) > 0:
+                return columns[0].get('column_name', '')
+        except:
+            pass
+        return ''
+    
+    def _build_announcement_url(self, art_code: str) -> str:
+        """构造公告详情页 URL"""
+        if art_code:
+            return f"https://data.eastmoney.com/notices/stock/{art_code}.html"
+        return ''
     
     
     def fetch_real_estate_financials(self, companies: List[str] = None) -> List[Dict[str, Any]]:
