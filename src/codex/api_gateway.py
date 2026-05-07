@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any, Dict
 from urllib.parse import urlparse
 
@@ -10,10 +11,17 @@ from codex.services.executive_intelligence import run_executive_intelligence
 from codex.services.health_check import run_health_check
 from codex.services.realtime_pipeline import run_realtime_pipeline
 
+STATIC_DIR = Path(__file__).parent / "static"
+
 
 class NewsroomAPIHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
+
+        if path in {"/", "/dashboard"}:
+            self._serve_dashboard()
+            return
+
         routes = {
             "/health": lambda: run_health_check(),
             "/control-center": lambda: build_control_center(),
@@ -42,6 +50,18 @@ class NewsroomAPIHandler(BaseHTTPRequestHandler):
             self._json_response(handler())
         except Exception as exc:  # noqa: BLE001
             self._json_response({"error": str(exc), "path": path}, status=500)
+
+    def _serve_dashboard(self) -> None:
+        dashboard = STATIC_DIR / "dashboard.html"
+        if not dashboard.exists():
+            self.send_error(404, "dashboard_not_found")
+            return
+        content = dashboard.read_text(encoding="utf-8").encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(content)))
+        self.end_headers()
+        self.wfile.write(content)
 
     def _read_json_body(self) -> Dict[str, Any]:
         length = int(self.headers.get("Content-Length", "0") or 0)
