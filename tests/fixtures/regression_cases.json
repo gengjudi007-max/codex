@@ -1,0 +1,66 @@
+[
+  {
+    "name": "policy_language_shift",
+    "payload": {
+      "items": [
+        {
+          "source": "policy",
+          "title": "中央会议提出努力稳定房地产市场",
+          "summary": "会议表述从着力稳定转向努力稳定，强调促进房地产市场止跌回稳。"
+        }
+      ]
+    },
+    "expected_mode": "topic_pipeline",
+    "expected_topic_keywords": ["政策", "市场信号"],
+    "expected_category": "政策解读"
+  },
+  {
+    "name": "city_investment_land_signal",
+    "payload": {
+      "items": [
+        {
+          "source": "land",
+          "city": "武汉",
+          "title": "武汉多宗土地底价成交",
+          "summary": "城投拿地占比超过70%，地方平台继续托底土地市场。"
+        }
+      ]
+    },
+    "expected_mode": "topic_pipeline",
+    "expected_topic_keywords": ["武汉", "城投", "土地"],
+    "expected_category": "土地市场"
+  },
+  {
+    "name": "property_service_cycle",
+    "payload": {
+      "items": [
+        {
+          "source": "annual_report",
+          "company": "保利物业",
+          "title": "保利物业主动退出低效项目",
+          "summary": "企业在管面积增速放缓，合同面积调整，应收账款压力仍需观察。"
+        }
+      ]
+    },
+    "expected_mode": "topic_pipeline",
+    "expected_topic_keywords": ["物业", "收缩"],
+    "expected_category": "物业服务"
+  },
+  {
+    "name": "annual_report_profit_pressure",
+    "payload": {
+      "report": {
+        "company": "保利发展",
+        "year": "2025",
+        "metrics": {
+          "net_profit_yoy": -40,
+          "impairment_loss": 35,
+          "operating_cash_flow": -10
+        }
+      }
+    },
+    "expected_mode": "annual_report",
+    "expected_topic_keywords": ["保利发展", "业绩承压"],
+    "expected_category": "房企经营"
+  }
+]
