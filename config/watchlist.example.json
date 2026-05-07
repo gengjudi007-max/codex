@@ -1,0 +1,36 @@
+{
+  "interval_seconds": 3600,
+  "store_path": "data/source_items.jsonl",
+  "memory_path": "data/memory_events.jsonl",
+  "run_log_path": "data/run_logs/continuous_runner.jsonl",
+  "previous_policy": "会议提出着力稳定房地产市场。",
+  "current_policy": "会议提出努力稳定房地产市场，推动止跌回稳。",
+  "sources": [
+    {
+      "name": "上交所公告",
+      "source_type": "exchange_filing",
+      "url": "https://example.com/sse-announcement"
+    },
+    {
+      "name": "自然资源土地公告",
+      "source_type": "land_transaction",
+      "url": "https://example.com/land"
+    },
+    {
+      "name": "专项债募集说明书",
+      "source_type": "bond_prospectus",
+      "url": "https://example.com/bond"
+    }
+  ],
+  "texts": [
+    "武汉土地市场继续承压，城投托底仍在持续。"
+  ],
+  "items": [
+    {
+      "title": "保利发展2025年年报",
+      "source_type": "annual_report",
+      "content": "净利润下降40%，经营现金流承压。"
+    }
+  ],
+  "paths": []
+}
