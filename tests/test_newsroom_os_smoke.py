@@ -2,7 +2,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from codex.services.async_runtime import build_realtime_event, run_async_runtime_once
 from codex.services.collaboration_os import (
     add_editorial_review,
     add_verification_task,
@@ -11,6 +10,7 @@ from codex.services.collaboration_os import (
     init_collaboration_os,
     update_assignment_status,
 )
+from codex.services.connector_scheduler import ConnectorScheduler
 from codex.services.control_center import build_control_center
 from codex.services.executive_intelligence import run_executive_intelligence
 from codex.services.health_check import run_health_check
@@ -21,7 +21,9 @@ from codex.services.publishing_os import (
     init_publishing_os,
     publication_gate,
 )
+from codex.services.queue_runtime import LocalPriorityQueue, build_event
 from codex.services.sqlite_store import init_db
+from codex.services.worker_runtime import WorkerRuntime
 
 
 class NewsroomOSSmokeTest(unittest.TestCase):
@@ -39,11 +41,26 @@ class NewsroomOSSmokeTest(unittest.TestCase):
         result = run_health_check()
         self.assertIn("overall_status", result)
 
-    def test_async_runtime_runs(self):
-        result = run_async_runtime_once([
-            build_realtime_event({"connectors": []})
-        ])
-        self.assertIn("overall_status", result)
+    def test_queue_runtime(self):
+        runtime = LocalPriorityQueue()
+        runtime.publish(build_event("heartbeat", {"ok": True}))
+        self.assertEqual(runtime.size(), 1)
+        event = runtime.consume()
+        self.assertEqual(event.event_type, "heartbeat")
+
+    def test_scheduler_runtime(self):
+        scheduler = ConnectorScheduler()
+        scheduler.register_connector("hkex", cadence_seconds=60)
+        result = scheduler.run_once()
+        self.assertIn("scheduled_connectors", result)
+        self.assertEqual(result["queue_size"], 1)
+
+    def test_worker_runtime(self):
+        queue_runtime = LocalPriorityQueue()
+        queue_runtime.publish(build_event("connector.poll", {"source": "hkex"}))
+        worker_runtime = WorkerRuntime(queue_runtime)
+        result = worker_runtime.run_once()
+        self.assertEqual(result["processed_count"], 1)
 
     def test_collaboration_workflow(self):
         assignment = create_assignment(
