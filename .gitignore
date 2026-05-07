@@ -25,5 +25,14 @@ tmp/
 logs/
 *.log
 
-# Local imported source material and generated JSONL stores.
+# Node.js
+node_modules/
+package-lock.json
+package.json
+
+# Test files
+test_*.py
+extract_token.js
+
+# Local imported source material and generated JSON stores.
 data/
