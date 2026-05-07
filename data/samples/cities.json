@@ -1,0 +1,14 @@
+{
+  "items": [
+    {"city":"北京","category":"market_data","metric":"new_home_area_yoy","value":5.2,"source":"中指研究院"},
+    {"city":"上海","category":"market_data","metric":"new_home_area_yoy","value":6.1,"source":"中指研究院"},
+    {"city":"深圳","category":"market_data","metric":"price_mom","value":0.8,"source":"中指研究院"},
+    {"city":"广州","category":"market_data","metric":"price_mom","value":-0.5,"source":"中指研究院"},
+    {"city":"杭州","category":"land","metric":"premium_rate","value":8.2,"source":"地方自然资源和规划部门"},
+    {"city":"成都","category":"land","metric":"premium_rate","value":3.1,"source":"地方自然资源和规划部门"},
+    {"city":"西安","category":"inventory","metric":"inventory_months","value":18,"source":"地方住建部门"},
+    {"city":"武汉","category":"inventory","metric":"inventory_months","value":22,"source":"地方住建部门"},
+    {"city":"天津","category":"market_data","metric":"secondhand_area_yoy","value":-3.5,"source":"贝壳研究院"},
+    {"city":"重庆","category":"market_data","metric":"secondhand_area_yoy","value":-5.2,"source":"贝壳研究院"}
+  ]
+}

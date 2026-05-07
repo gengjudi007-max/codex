@@ -1,0 +1,84 @@
+policy_sources:
+  - name: 自然资源部
+    type: central_government
+    module: policy
+    url: https://www.mnr.gov.cn/
+    frequency: daily
+    authority_level: high
+
+  - name: 住房和城乡建设部
+    type: central_government
+    module: policy
+    url: https://www.mohurd.gov.cn/
+    frequency: daily
+    authority_level: high
+
+  - name: 中国人民银行
+    type: central_government
+    module: finance_policy
+    url: https://www.pbc.gov.cn/
+    frequency: daily
+    authority_level: high
+
+  - name: 国家金融监督管理总局
+    type: regulator
+    module: finance_policy
+    url: https://www.cbirc.gov.cn/
+    frequency: daily
+    authority_level: high
+
+company_announcement_sources:
+  - name: 港交所披露易
+    type: exchange
+    module: company_announcements
+    url: https://www.hkexnews.hk/
+    frequency: hourly
+    authority_level: high
+
+  - name: 上海证券交易所
+    type: exchange
+    module: company_announcements
+    url: https://www.sse.com.cn/
+    frequency: hourly
+    authority_level: high
+
+  - name: 深圳证券交易所
+    type: exchange
+    module: company_announcements
+    url: https://www.szse.cn/
+    frequency: hourly
+    authority_level: high
+
+land_sources:
+  - name: 中国土地市场网
+    type: land_market
+    module: land_transactions
+    url: https://www.landchina.com/
+    frequency: daily
+    authority_level: high
+
+  - name: 地方自然资源部门
+    type: local_government
+    module: land_transactions
+    frequency: daily
+    authority_level: high
+
+market_data_sources:
+  - name: 国家统计局
+    type: statistics
+    module: market_data
+    url: https://www.stats.gov.cn/
+    frequency: monthly
+    authority_level: high
+
+  - name: 克而瑞
+    type: third_party
+    module: market_data
+    frequency: weekly
+    authority_level: medium
+
+  - name: 中指研究院
+    type: third_party
+    module: market_data
+    frequency: weekly
+    authority_level: medium
