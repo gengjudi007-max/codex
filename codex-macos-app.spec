@@ -15,6 +15,7 @@ a = Analysis(
     ],
     hiddenimports=[
         'codex',
+        'codex.interaction',
         'codex.services',
         'codex.connectors',
         'codex.connectors.beijing_land_connector',
@@ -32,6 +33,7 @@ a = Analysis(
         'codex.models',
         'codex.utils',
         'pypdf',
+        'requests',
         'urllib.request',
         'urllib.parse',
         'subprocess',
