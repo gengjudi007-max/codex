@@ -92,6 +92,10 @@ codex/
 │       │   ├── source_store.py   # JSONL 资料库存储、统计和流式检索
 │       │   ├── bulk_importer.py  # 本地文件夹批量导入
 │       │   └── text_utils.py     # 文本清洗和城市/公司识别
+├── financial_data_connector.py  # 金融数据连接器（东方财富、巨潮、国家统计局）
+├── exchange_connector.py        # 交易所数据连接器（上交所、深交所、港交所）
+├── automation_pipeline.py       # 自动化流程管道
+├── task_queue.py               # 持久化任务队列
 ├── tests/                        # 测试代码
 ├── .gitignore
 ├── pyproject.toml
@@ -307,6 +311,9 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 - [x] 建立土地市场异动识别模板
 - [x] 增加稿件基础体检模块
 - [x] 增加示例和单元测试
+- [x] 打通金融数据接口（东方财富、巨潮资讯、国家统计局）
+- [x] 添加交易所数据连接器框架（上交所、深交所、港交所）
+- [x] 完善自动化流程和任务队列
 - [ ] 接入更多政策文件、公告、市场数据等信息源
 - [ ] 增加 PDF/HTML 年报自动抽取
 - [ ] 增加更细的城市、公司和关键词词库
