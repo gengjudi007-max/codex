@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 import time
+import urllib.parse
+import urllib.request
 from typing import Any, Dict, List, Optional
-
-import requests
 
 
 BASE_URL = "https://yewu.ghzrzyw.beijing.gov.cn"
@@ -45,9 +46,10 @@ def fetch_beijing_land_page(page: int = 1, limit: int = 10) -> Dict[str, Any]:
         "gjz": "",
         "_": timestamp,
     }
-    resp = requests.get(API_URL, params=params, headers=HEADERS, timeout=15)
-    resp.raise_for_status()
-    return resp.json()
+    url = f"{API_URL}?{urllib.parse.urlencode(params)}"
+    req = urllib.request.Request(url, headers=HEADERS)
+    with urllib.request.urlopen(req, timeout=15) as response:
+        return json.loads(response.read().decode('utf-8'))
 
 
 def extract_rows(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -68,7 +70,7 @@ def normalize_api_row(row: Dict[str, Any]) -> Dict[str, Any]:
     district = pick(row, ["county", "district", "qx", "xzq", "qymc"])
     land_use = pick(row, ["landusetype1", "landuse", "landUse", "tdyt", "ghyt", "yt"])
     status = pick(row, ["status", "jyzt", "zt", "announcetype", "gglx"])
-    date = pick(row, ["date", "cjsj", "jzsj", "fbsj", "pubdate", "createTime"])
+    date = pick(row, ["date", "cjsj", "jzsj", "fbsj", "pubdate", "createTime", "createDateTime", "publishTime", "executiondate", "startdate"])
     url = build_detail_url(row)
 
     metrics = {}
