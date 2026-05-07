@@ -1,282 +1,308 @@
-from __future__ import annotations
-
+#!/usr/bin/env python3
+"""
+上海土地市场连接器（最终工作版）
+- 拦截 API 响应（HTML 格式）
+- 解析 HTML 提取土地数据
+- 支持翻页（重新发送 API 请求）
+"""
+import asyncio
 import json
 import re
-import subprocess
-import warnings
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlencode
-
-import requests
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
+from playwright.async_api import async_playwright
 
 
-BASE_URL = "https://biz.ghzyj.sh.gov.cn"
-SOURCE = "上海土地市场"
-REFERER = "https://biz.ghzyj.sh.gov.cn/shtdsc/jy/view/web/transaction/result/list_result_ywtb.html?tabIndex=1"
-TOKEN_URL = "https://biz.ghzyj.sh.gov.cn/shtdsc/jy/view/web/transaction/result/list_result_ywtb.html"
-
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147 Safari/537.36",
-    "Referer": REFERER,
-    "Origin": BASE_URL,
-    "Accept": "*/*",
-    "Accept-Language": "zh,zh-CN;q=0.9",
-    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-    "X-Requested-With": "XMLHttpRequest",
-}
-
-
-def fetch_dynamic_token(use_curl: bool = True) -> Optional[str]:
+class ShanghaiLandConnector:
     """
-    从上海土地市场页面获取动态token (MmEwMD)
-    """
-    headers = dict(HEADERS)
-    headers.pop("Content-Type", None)
-    headers.pop("X-Requested-With", None)
+    上海土地市场连接器
     
-    try:
-        if not use_curl:
-            warnings.simplefilter("ignore", InsecureRequestWarning)
-            response = requests.get(TOKEN_URL, headers=headers, timeout=15, verify=False)
-            response.raise_for_status()
-            html = response.text
-        else:
-            cmd = [
-                "curl",
-                "-k",
-                "--silent",
-                "--show-error",
-                "--location",
-                TOKEN_URL,
-                "-H", f"User-Agent: {HEADERS['User-Agent']}",
-                "-H", f"Referer: {HEADERS['Referer']}",
-                "-H", "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            ]
-            completed = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            html = completed.stdout
-        
-        # 尝试从HTML中提取token
-        # 可能的格式: <input type="hidden" id="MmEwMD" value="xxx" />
-        # 或者: var MmEwMD = "xxx";
-        patterns = [
-            r'id="MmEwMD"\s+value="([^"]+)"',
-            r'name="MmEwMD"\s+value="([^"]+)"',
-            r'MmEwMD\s*=\s*["\']([^"\']+)["\']',
-            r'"MmEwMD"\s*:\s*"([^"]+)"',
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, html, re.IGNORECASE)
-            if match:
-                token = match.group(1)
-                if token and len(token) > 5:  # 简单验证token长度
-                    return token
-        
-        # 如果没找到，返回None
-        return None
-        
-    except Exception as e:
-        print(f"Warning: Failed to fetch dynamic token: {e}")
-        return None
-
-
-def fetch_shanghai_land_items(
-    api_url: str,
-    payload: Optional[Dict[str, Any]] = None,
-    max_pages: int = 1,
-    verify_ssl: bool = False,
-    use_curl_fallback: bool = True,
-    cookie: Optional[str] = None,
-    auto_fetch_token: bool = True,
-) -> List[Dict[str, Any]]:
-    results: List[Dict[str, Any]] = []
-    payload = payload or default_payload(auto_fetch_token=auto_fetch_token)
-
-    if not verify_ssl:
-        warnings.simplefilter("ignore", InsecureRequestWarning)
-
-    for page in range(1, max_pages + 1):
-        page_payload = dict(payload)
-        page_payload["page"] = page
-        page_payload.setdefault("limit", 10)
-        data = fetch_page(api_url, page_payload, verify_ssl=verify_ssl, use_curl_fallback=use_curl_fallback, cookie=cookie)
-        rows = extract_rows(data)
-        if not rows:
-            break
-        for row in rows:
-            item = normalize_row(row)
-            if item:
-                results.append(item)
-    return results
-
-
-def debug_shanghai_response(
-    api_url: str,
-    payload: Optional[Dict[str, Any]] = None,
-    cookie: Optional[str] = None,
-    auto_fetch_token: bool = True,
-) -> Dict[str, Any]:
-    payload = payload or default_payload(auto_fetch_token=auto_fetch_token)
-    data = fetch_page(api_url, payload, verify_ssl=False, use_curl_fallback=True, cookie=cookie)
-    raw_text = data.get("raw_text") if isinstance(data, dict) else None
-    return {
-        "keys": list(data.keys()) if isinstance(data, dict) else [],
-        "row_count": len(extract_rows(data)) if isinstance(data, dict) else 0,
-        "raw_preview": (raw_text or json.dumps(data, ensure_ascii=False))[:1000],
-        "payload_used": payload,
-    }
-
-
-def fetch_page(
-    api_url: str,
-    payload: Dict[str, Any],
-    verify_ssl: bool = False,
-    use_curl_fallback: bool = True,
-    cookie: Optional[str] = None,
-) -> Dict[str, Any]:
-    headers = dict(HEADERS)
-    if cookie:
-        headers["Cookie"] = cookie
-    try:
-        response = requests.post(
-            api_url,
-            data=payload,
-            headers=headers,
-            timeout=15,
-            verify=verify_ssl,
+    工作原理：
+    1. 访问上海土地市场页面，获取 token
+    2. 在页面上下文中调用 API
+    3. 拦截 API 响应（HTML 格式）
+    4. 解析 HTML 提取土地数据
+    """
+    
+    TOKEN_URL = "https://biz.ghzyj.sh.gov.cn/shtdsc/jy/view/web/transaction/result/list_result_ywtb.html"
+    API_PATH = "/shtdsc/jy/api/result/listForPage"
+    
+    def __init__(self, headless: bool = True):
+        self.headless = headless
+        self.playwright = None
+        self.browser = None
+        self.context = None
+        self.page = None
+        self.token = None
+        self.last_html = None
+    
+    async def __aenter__(self):
+        await self.init_browser()
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
+    
+    async def init_browser(self):
+        """初始化浏览器"""
+        print("🚀 初始化浏览器...")
+        self.playwright = await async_playwright().start()
+        self.browser = await self.playwright.chromium.launch(
+            headless=self.headless,
+            args=['--disable-blink-features=AutomationControlled']
         )
-        response.raise_for_status()
-        return safe_json_text(response.text)
-    except requests.exceptions.SSLError:
-        if not use_curl_fallback:
-            raise
-        return fetch_page_with_curl(api_url, payload, cookie=cookie)
-
-
-def fetch_page_with_curl(api_url: str, payload: Dict[str, Any], cookie: Optional[str] = None) -> Dict[str, Any]:
-    data = urlencode(payload)
-    cmd = [
-        "curl",
-        "-k",
-        "--silent",
-        "--show-error",
-        "--location",
-        api_url,
-        "-H", f"User-Agent: {HEADERS['User-Agent']}",
-        "-H", f"Referer: {HEADERS['Referer']}",
-        "-H", f"Origin: {HEADERS['Origin']}",
-        "-H", f"Accept: {HEADERS['Accept']}",
-        "-H", f"Accept-Language: {HEADERS['Accept-Language']}",
-        "-H", f"Content-Type: {HEADERS['Content-Type']}",
-        "-H", f"X-Requested-With: {HEADERS['X-Requested-With']}",
-    ]
-    if cookie:
-        cmd.extend(["-b", cookie])
-    cmd.extend(["--data-raw", data])
-    completed = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    return safe_json_text(completed.stdout)
-
-
-def default_payload(auto_fetch_token: bool = True) -> Dict[str, Any]:
-    """
-    生成默认payload，可选自动获取动态token
-    """
-    payload = {
-        "page": 1,
-        "limit": 10,
-        "busType": "转让地块",
-        "resultStartTime": "",
-        "resultEndTime": "",
-        "blockName": "",
-        "blockNoticeNo": "",
-        "resultName": "",
-    }
+        
+        self.context = await self.browser.new_context(
+            user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+            viewport={'width': 1920, 'height': 1080},
+            locale='zh-CN'
+        )
+        
+        self.page = await self.context.new_page()
+        
+        # 访问页面，获取 token
+        print("🌐 访问上海土地市场...")
+        await self.page.goto(
+            self.TOKEN_URL,
+            wait_until='networkidle',
+            timeout=60000
+        )
+        print("✅ 页面加载完成")
+        
+        # 等待一下，让 JavaScript 执行
+        await self.page.wait_for_timeout(5000)
+        
+        # 从页面中提取 token（从全局变量或 URL 中）
+        await self._extract_token()
     
-    # 自动获取动态token
-    if auto_fetch_token:
-        token = fetch_dynamic_token(use_curl=True)
-        if token:
-            payload["MmEwMD"] = token
+    async def _extract_token(self):
+        """从页面中提取 MmEwMD token"""
+        print("\n🔑 提取动态 token...")
+        
+        try:
+            # 方法1：从网络请求中拦截（最直接）
+            # 我们需要重新加载页面并拦截请求
+            self.token = None
+            
+            # 方法2：从页面的 JavaScript 变量中获取
+            token = await self.page.evaluate("""
+                () => {
+                    // 尝试多种可能的位置
+                    const sources = [
+                        () => window['MmEwMD'],
+                        () => eval('MmEwMD'),
+                        () => document.querySelector('#MmEwMD')?.value,
+                        () => document.querySelector('[name="MmEwMD"]')?.value,
+                    ];
+                    
+                    for (const getToken of sources) {
+                        try {
+                            const token = getToken();
+                            if (token && token.length > 5) {
+                                return token;
+                            }
+                        } catch (e) {
+                            // 忽略错误
+                        }
+                    }
+                    
+                    return null;
+                }
+            """)
+            
+            if token:
+                self.token = token
+                print(f"   ✅ 获取到 token: {token[:30]}...")
+            else:
+                print(f"   ⚠️  未找到 token，将尝试拦截网络请求...")
+                
+        except Exception as e:
+            print(f"   ❌ 获取 token 失败: {e}")
     
-    return payload
+    async def close(self):
+        """关闭浏览器"""
+        print("\n🏁 关闭浏览器...")
+        if self.browser:
+            await self.browser.close()
+        if self.playwright:
+            await self.playwright.stop()
+    
+    async def fetch_land_data(
+        self,
+        page_num: int = 1,
+        page_size: int = 10,
+        bus_type: str = "出让地块"
+    ) -> List[Dict[str, Any]]:
+        """
+        获取上海土地数据
+        
+        方法：
+        1. 在页面上下文中调用 API
+        2. 拦截响应（HTML）
+        3. 解析 HTML 提取数据
+        """
+        print(f"\n📊 获取上海土地数据 (页码: {page_num}, 类型: {bus_type})...")
+        
+        # 确保有 token
+        if not self.token:
+            await self._extract_token()
+        
+        # 在页面上下文中调用 API 并拦截响应
+        html = await self._call_api_and_get_html(page_num, page_size, bus_type)
+        
+        if not html:
+            print(f"   ❌ 未获取到 HTML 响应")
+            return []
+        
+        # 解析 HTML 提取数据
+        data = self._parse_html(html)
+        print(f"   ✅ 提取到 {len(data)} 条数据")
+        
+        return data
+    
+    async def _call_api_and_get_html(
+        self,
+        page_num: int,
+        page_size: int,
+        bus_type: str
+    ) -> Optional[str]:
+        """调用 API 并获取 HTML 响应"""
+        
+        html_response = None
+        
+        # 监听响应，拦截 API 调用
+        async def handle_response(response):
+            nonlocal html_response
+            url = response.url
+            if 'listForPage' in url:
+                print(f"   📥 拦截到 API 响应: {response.status}")
+                try:
+                    content_type = response.headers.get('content-type', '')
+                    if 'html' in content_type or 'text' in content_type:
+                        html_response = await response.text()
+                        print(f"      HTML 长度: {len(html_response)}")
+                except Exception as e:
+                    print(f"      ❌ 读取响应失败: {e}")
+        
+        self.page.on('response', handle_response)
+        
+        try:
+            # 在页面上下文中调用 API
+            await self.page.evaluate("""
+                async (params) => {
+                    const url = `/shtdsc/jy/api/result/listForPage?MmEwMD=${params.token || ''}`;
+                    
+                    try {
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json, text/plain, */*',
+                                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                            body: new URLSearchParams({
+                                page: params.page,
+                                limit: params.limit,
+                                busType: params.busType
+                            }).toString()
+                        });
+                        
+                        // 消耗响应（让 response 事件触发）
+                        await response.text();
+                    } catch (error) {
+                        console.error('API call failed:', error);
+                    }
+                }
+            """, {
+                'token': self.token or '',
+                'page': page_num,
+                'limit': page_size,
+                'busType': bus_type
+            })
+            
+            # 等待响应被拦截
+            await self.page.wait_for_timeout(3000)
+            
+            return html_response
+            
+        except Exception as e:
+            print(f"   ❌ API 调用失败: {e}")
+            return None
+        finally:
+            # 移除监听器
+            self.page.remove_listener('response', handle_response)
+    
+    def _parse_html(self, html: str) -> List[Dict[str, Any]]:
+        """解析 HTML，提取土地数据"""
+        print(f"   📊 解析 HTML ({len(html)} 字符)...")
+        
+        results = []
+        
+        try:
+            # 使用正则表达式提取 <li> 元素
+            # 格式：<li><a onclick="jumpR(&quot;ID&quot;);">地块名称</a><span>日期</span></li>
+            li_pattern = r'<li>\s*<a\s+onclick="jumpR\(&quot;([^&]+)&quot;\)[^>]*>([^<]+)</a>\s*<span>([^<]+)</span>\s*</li>'
+            
+            matches = re.findall(li_pattern, html, re.DOTALL)
+            
+            for match in matches:
+                land_id, title, date = match
+                results.append({
+                    'id': land_id,
+                    'title': title.strip(),
+                    'date': date.strip(),
+                    'city': '上海',
+                    'source': '上海土地市场'
+                })
+            
+            return results
+            
+        except Exception as e:
+            print(f"   ❌ 解析失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+    
+    def normalize_land_data(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
+        """标准化土地数据格式"""
+        return {
+            'category': 'land',
+            'title': raw_data.get('title') or '上海土地成交项目',
+            'content': f"地块：{raw_data.get('title', '')}，日期：{raw_data.get('date', '')}",
+            'city': '上海',
+            'date': raw_data.get('date') or '',
+            'source': '上海土地市场',
+            'source_level': 'level_2',
+            'verified': True,
+            'raw': raw_data
+        }
 
 
-def safe_json_text(text: str) -> Dict[str, Any]:
-    text = (text or "").strip()
-    try:
-        return json.loads(text)
-    except Exception:
-        return {"raw_text": text}
+async def test_shanghai_land_connector():
+    """测试上海土地市场连接器"""
+    print("🧪 测试上海土地市场连接器（最终版）")
+    print("=" * 60)
+    
+    async with ShanghaiLandConnector(headless=True) as connector:
+        # 测试：获取第 1 页的数据
+        print("\n📍 测试：获取第 1 页数据（出让地块）...")
+        data = await connector.fetch_land_data(page_num=1, page_size=5, bus_type="出让地块")
+        print(f"   获取到 {len(data)} 条数据")
+        
+        if data:
+            print("\n   前 3 条数据:")
+            for i, item in enumerate(data[:3], 1):
+                normalized = connector.normalize_land_data(item)
+                print(f"   {i}. {normalized['title']}")
+                print(f"      日期: {normalized['date']}")
+        
+        return {
+            'data_count': len(data)
+        }
 
 
-def extract_rows(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
-    for key in ["data", "rows", "list", "result"]:
-        value = payload.get(key)
-        if isinstance(value, list):
-            return value
-        if isinstance(value, dict):
-            for nested_key in ["data", "rows", "list", "records"]:
-                nested = value.get(nested_key)
-                if isinstance(nested, list):
-                    return nested
-    return []
-
-
-def normalize_row(row: Dict[str, Any]) -> Dict[str, Any]:
-    land_name = pick(row, ["title", "landName", "zdmc", "xmmc", "name", "noticeTitle"])
-    district = pick(row, ["county", "district", "qx", "xzq", "regionName"])
-    land_use = pick(row, ["landuse", "landUse", "tdyt", "ghyt", "useType"])
-    date = pick(row, ["date", "cjsj", "fbsj", "pubdate", "createTime", "dealTime"])
-    buyer = pick(row, ["buyer", "jdr", "竞得人", "companyName", "winner"])
-    metrics = {}
-    for key, aliases in {
-        "land_area": ["tdmj", "ydmj", "landArea", "area"],
-        "planned_gfa": ["jzmj", "ghjzmj", "buildingArea", "gfa"],
-        "land_amount": ["cjj", "cjje", "price", "amount", "dealPrice"],
-        "floor_price": ["floorPrice", "loudijia", "cjlmj"],
-        "premium_rate": ["premiumRate", "yjl", "premium"],
-    }.items():
-        value = to_number(pick(row, aliases))
-        if value is not None:
-            metrics[key] = value
-    content_parts = []
-    if land_name:
-        content_parts.append(f"地块名称为{land_name}")
-    if district:
-        content_parts.append(f"所在区域为{district}")
-    if land_use:
-        content_parts.append(f"规划用途为{land_use}")
-    if buyer:
-        content_parts.append(f"竞得方为{buyer}")
-    return {
-        "category": "land",
-        "title": land_name or "上海土地成交项目",
-        "content": "，".join(content_parts) + "。" if content_parts else "上海土地成交项目。",
-        "city": "上海",
-        "date": date,
-        "source": SOURCE,
-        "source_level": "level_2",
-        "verified": True,
-        "metrics": metrics,
-        "raw": row,
-    }
-
-
-def pick(row: Dict[str, Any], keys: List[str]) -> Optional[Any]:
-    for key in keys:
-        if key in row and row[key] not in [None, ""]:
-            return row[key]
-    return None
-
-
-def to_number(value: Any) -> Optional[float]:
-    if value is None or value == "":
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    text = str(value).strip().replace(",", "").replace("%", "")
-    try:
-        return float(text)
-    except ValueError:
-        return None
+if __name__ == '__main__':
+    result = asyncio.run(test_shanghai_land_connector())
+    
+    print("\n" + "=" * 60)
+    print("✅ 测试完成!")
+    print(f"   数据: {result['data_count']} 条")
