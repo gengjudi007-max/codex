@@ -45,20 +45,21 @@ RISK_SIGNALS = {
 
 
 def analyze_risk_chain(payload: Any) -> Dict[str, Any]:
-    """Connect scattered real-estate signals into reportable risk chains."""
     text = _payload_to_text(payload)
     matched = []
 
     for name, rule in RISK_SIGNALS.items():
         hits = [keyword for keyword in rule["keywords"] if keyword in text]
         if hits:
+            priority = _priority(len(hits), len(rule["risk_nodes"]))
             matched.append(
                 {
                     "chain": name,
                     "matched_keywords": unique(hits),
                     "risk_nodes": rule["risk_nodes"],
                     "followup_questions": rule["followups"],
-                    "priority": _priority(len(hits), len(rule["risk_nodes"])),
+                    "priority": priority["level"],
+                    "priority_score": priority["score"],
                 }
             )
 

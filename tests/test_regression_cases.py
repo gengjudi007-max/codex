@@ -41,6 +41,11 @@ class RegressionCasesTests(unittest.TestCase):
                         str(top_topic.get("topic", "")),
                         str(top_topic.get("angle", "")),
                         str(top_topic.get("reason", "")),
+                        str(top_topic.get("materials", "")),
+                        str(top_topic.get("interview_targets", "")),
+                        str(top_topic.get("questions", "")),
+                        str(top_topic.get("material_plan", "")),
+                        str(top_topic.get("interview_plan", "")),
                     ]
                 )
 
