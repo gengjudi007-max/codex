@@ -6,7 +6,7 @@ from collections import Counter
 from typing import Any, Dict, List
 
 from codex.services.autonomous_intelligence import run_autonomous_intelligence
-from codex.services.knowledge_graph_store import related_entities, risk_propagation
+from codex.services.knowledge_graph_store import related_entities
 from codex.services.retrieval_engine import entity_query, newsroom_summary, timeline_query
 from codex.services.sqlite_store import DEFAULT_DB_PATH, init_db
 
