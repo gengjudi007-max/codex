@@ -27,10 +27,14 @@ class SimpleCityLandConnector:
         初始化连接器
         
         Args:
-            city_name: 城市名称（如 "成都"、"西安"）
+            city_name: 城市名称（如 "成都"、"西安"），也可以是列表
             max_pages: 每个分类最多翻几页（默认 5 页，每页 25 条）
         """
-        self.city_name = city_name
+        # 支持单个城市名或城市名列表
+        if isinstance(city_name, list):
+            self.city_names = city_name
+        else:
+            self.city_names = [city_name]
         self.max_pages = max_pages
     
     def _fetch_html(self, url: str) -> Optional[str]:
@@ -58,8 +62,14 @@ class SimpleCityLandConnector:
         matches = re.findall(pattern, html)
         
         for date, href, title in matches:
-            # 只保留包含城市名的数据
-            if self.city_name in title:
+            # 只保留包含任一城市名的数据
+            city_matched = None
+            for city in self.city_names:
+                if city in title:
+                    city_matched = city
+                    break
+            
+            if city_matched:
                 if not href.startswith('http'):
                     href = self.BASE_URL + '/' + href.lstrip('/')
                 
@@ -67,7 +77,7 @@ class SimpleCityLandConnector:
                     'title': title.strip(),
                     'url': href,
                     'date': date.strip(),
-                    'city': self.city_name,
+                    'city': city_matched,
                     'source': '中国土地市场网'
                 })
         
@@ -75,7 +85,8 @@ class SimpleCityLandConnector:
     
     def fetch_data(self, max_per_category: int = 5) -> List[Dict[str, Any]]:
         """获取该城市的所有土地数据（支持翻页）"""
-        print(f"\n🔍 获取 {self.city_name} 的土地数据（每分类翻 {self.max_pages} 页）...")
+        city_display = '/'.join(self.city_names)
+        print(f"\n🔍 获取 {city_display} 的土地数据（每分类翻 {self.max_pages} 页）...")
         
         all_data = []
         
@@ -99,10 +110,10 @@ class SimpleCityLandConnector:
                 data = self._parse_html(html)
                 
                 if data:
-                    print(f"      第 {page+1} 页: 找到 {len(data)} 条包含 '{self.city_name}' 的数据")
+                    print(f"      第 {page+1} 页: 找到 {len(data)} 条包含 '{city_display}' 的数据")
                     category_data.extend(data)
                 else:
-                    print(f"      第 {page+1} 页: 未找到包含 '{self.city_name}' 的数据")
+                    print(f"      第 {page+1} 页: 未找到包含 '{city_display}' 的数据")
                     # 注释掉提前停止的逻辑，让它翻完所有页
                     # if page > 2:  # 如果已经翻了 2 页都没有，就停止
                     #     break
@@ -124,11 +135,12 @@ class SimpleCityLandConnector:
     
     def normalize_land_data(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
         """标准化土地数据格式"""
+        city = raw_data.get('city', self.city_names[0])
         return {
             'category': 'land',
-            'title': raw_data.get('title') or f'{self.city_name}土地成交公告',
+            'title': raw_data.get('title') or f'{city}土地成交公告',
             'content': f"公告：{raw_data.get('title', '')}，日期：{raw_data.get('date', '')}",
-            'city': self.city_name,
+            'city': city,
             'date': raw_data.get('date') or '',
             'source': '中国土地市场网',
             'source_level': 'level_1',
