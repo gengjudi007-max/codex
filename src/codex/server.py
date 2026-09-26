@@ -37,9 +37,12 @@ HTML = """<!doctype html>
     <p>输入政策、公告、土地成交、融资工具等信息，系统会返回选题、评分、报道角度和采访问题。</p>
     <textarea id="message">武汉土拍城投占比超70%，多宗地块底价成交，地方平台托底土地市场。</textarea>
     <div>
-      <button onclick="sendMessage()">生成选题</button>
+      <label>任务 <select id="taskMode"><option value="topic_pipeline">发现选题</option><option value="report">从来源生成报道</option></select></label>
+      <label>写作方式 <select id="writer"><option value="extractive">来源摘编</option><option value="model">模型写作</option></select></label>
+      <button onclick="sendMessage()">运行</button>
       <button class="secondary" onclick="runSample()">运行样例</button>
     </div>
+    <p>生成报道时粘贴包含 sources 的 JSON，每条来源填写 title、url 和 content。模型写作需服务端已配置模型；来源摘编可直接运行。</p>
     <section id="output"></section>
   </main>
   <script>
@@ -52,7 +55,21 @@ HTML = """<!doctype html>
       return response.json();
     }
     async function sendMessage() {
-      render(await post({message: document.getElementById('message').value}));
+      const value = document.getElementById('message').value;
+      try {
+        let payload;
+        if (document.getElementById('taskMode').value === 'report') {
+          payload = JSON.parse(value);
+          if (!payload || Array.isArray(payload) || typeof payload !== 'object') throw new Error('请提供来源 JSON 对象');
+          payload.mode = 'report';
+          payload.writer = document.getElementById('writer').value;
+        } else {
+          payload = {message: value};
+        }
+        render(await post(payload));
+      } catch (error) {
+        render({error: error.message || '请求失败，请检查输入和服务状态。'});
+      }
     }
     async function runSample() {
       render(await post({}));
@@ -60,6 +77,18 @@ HTML = """<!doctype html>
     function render(data) {
       const output = document.getElementById('output');
       const result = data.result || {};
+      if (data.error) {
+        output.innerHTML = '<p>' + escapeHtml(String(data.error)) + '</p>';
+        return;
+      }
+      if (data.mode === 'report') {
+        const issues = (result.verification_gate || {}).issues || [];
+        output.innerHTML = '<p>' + escapeHtml(result.writer === 'model' ? '模型稿件，待编辑审核' : '来源摘编，待编辑审核') + '</p>'
+          + '<pre>' + escapeHtml(result.article_text || '没有可生成的正文') + '</pre>'
+          + '<p>' + escapeHtml(issues.join('；')) + '</p>'
+          + '<details><summary>来源与段落对应</summary><pre>' + escapeHtml(JSON.stringify({sources: result.sources, paragraphs: result.paragraphs}, null, 2)) + '</pre></details>';
+        return;
+      }
       if (data.mode !== 'topic_pipeline') {
         output.innerHTML = '<pre>' + escapeHtml(JSON.stringify(result, null, 2)) + '</pre>';
         return;

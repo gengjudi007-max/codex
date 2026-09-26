@@ -53,7 +53,7 @@ def message_to_item(message: str) -> Dict[str, Any]:
 
 def _build_topic_message(topics: List[Dict[str, Any]]) -> str:
     if not topics:
-        return "暂未匹配到明确选题。可以补充政策措辞、公司公告、土地成交或金融工具等关键词。"
+        return "材料已接收，但现有规则未识别明确新闻事件，请人工复核选题；无需为了匹配而改写原始材料。"
 
     top = topics[0]
     return f"已识别 {len(topics)} 个选题，优先处理：{top['topic']}（{top['priority']}，评分 {top['final_score']}）。"
@@ -82,5 +82,5 @@ def _pipeline_warnings(
     if dropped:
         warnings.append(f"已忽略 {dropped} 条非对象输入。")
     if normalized_items and not topics:
-        warnings.append("未命中规则库，可补充政策、公告、土地、融资、城市更新或物业服务关键词。")
+        warnings.append("未命中规则库；保留材料待人工判断，不代表材料没有新闻价值。")
     return warnings

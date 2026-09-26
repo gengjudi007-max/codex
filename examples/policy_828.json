@@ -1,0 +1,42 @@
+{
+  "items": [
+    {
+      "source": "policy",
+      "title": "北京商品住房销售实施意见",
+      "summary": "2026年9月24日，北京发布实施意见。8月28日后新发布出让公告的商品住房项目申请预售须主体结构封顶。在途项目分类过渡。8月28日后取得预售许可证的项目，竣工备案后方可发放个人住房按揭贷款。",
+      "url": "https://www.beijing.gov.cn/zhengce/zhengcefagui/202609/t20260924_4880146.html"
+    },
+    {
+      "source": "land",
+      "title": "厦门成交两宗商住用地",
+      "summary": "据厦门日报9月25日报道，9月24日厦门成交两宗商住用地，总价41.95亿元。湖里2026P13地块成交35.61亿元，实行现房销售。",
+      "url": "https://news.xmnn.cn/xmxw/202609/t20260925_452941.html"
+    },
+    {
+      "source": "policy",
+      "title": "商品住房开发贷款管理办法",
+      "summary": "现售项目贷款期限原则上不超过5年，最长不超过7年。首次还本日期原则上应在竣工备案后。贷款不得跨项目使用，不得缴纳土地出让金。",
+      "url": "https://jrj.sh.gov.cn/YWTBZCCX166/20260831/06a03192e30d4bed99beb1bed84e6c90.html"
+    }
+  ],
+  "sources": [
+    {
+      "title": "北京商品住房销售实施意见",
+      "source_type": "government_document",
+      "url": "https://www.beijing.gov.cn/zhengce/zhengcefagui/202609/t20260924_4880146.html",
+      "content": "2026年9月24日，北京发布实施意见。8月28日后新发布出让公告的商品住房项目申请预售须主体结构封顶。在途项目分类过渡。8月28日后取得预售许可证的项目，竣工备案后方可发放个人住房按揭贷款。"
+    },
+    {
+      "title": "厦门成交两宗商住用地",
+      "source_type": "media_report",
+      "url": "https://news.xmnn.cn/xmxw/202609/t20260925_452941.html",
+      "content": "据厦门日报9月25日报道，9月24日厦门成交两宗商住用地，总价41.95亿元。湖里2026P13地块成交35.61亿元，实行现房销售。"
+    },
+    {
+      "title": "商品住房开发贷款管理办法",
+      "source_type": "government_document",
+      "url": "https://jrj.sh.gov.cn/YWTBZCCX166/20260831/06a03192e30d4bed99beb1bed84e6c90.html",
+      "content": "现售项目贷款期限原则上不超过5年，最长不超过7年。首次还本日期原则上应在竣工备案后。贷款不得跨项目使用，不得缴纳土地出让金。"
+    }
+  ]
+}

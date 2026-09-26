@@ -21,7 +21,17 @@ from codex.services.source_store import search_jsonl, summarize_jsonl
 from codex.services.terminal_importer import import_terminal_file
 
 
+def _report(payload: Dict[str, Any]) -> Dict[str, Any]:
+    from codex.services.grounded_report import source_items, write_grounded_report
+    report = write_grounded_report(payload)
+    report["topic_pipeline"] = run_topic_pipeline(source_items(payload))
+    return {"mode": "report", "result": report}
+
+
 HANDLERS = {
+    "report": _report,
+    "final_edit": lambda payload: _final_edit(payload),
+    "newsroom_orchestrator": lambda payload: _newsroom(payload),
     "propaganda_detect": lambda payload: _propaganda_detect(payload),
     "newsroom_rewrite_plan": lambda payload: _rewrite_plan(payload),
     "policy_semantics": lambda payload: _policy_semantics(payload),
@@ -172,3 +182,13 @@ def _topic_pipeline(payload: Dict[str, Any]) -> Dict[str, Any]:
         message = str(payload.get("message", "")).strip()
         items = [message_to_item(message)] if message else DEFAULT_ITEMS
     return {"mode": "topic_pipeline", "result": run_topic_pipeline(items)}
+
+
+def _final_edit(payload: Dict[str, Any]) -> Dict[str, Any]:
+    from codex.services.final_editorial_engine import final_edit_report
+    return {"mode": "final_edit", "result": final_edit_report(payload)}
+
+
+def _newsroom(payload: Dict[str, Any]) -> Dict[str, Any]:
+    from codex.services.newsroom_orchestrator import run_newsroom_orchestrator
+    return {"mode": "newsroom_orchestrator", "result": run_newsroom_orchestrator(payload)}

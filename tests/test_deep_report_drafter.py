@@ -13,7 +13,8 @@ class DeepReportDrafterTests(unittest.TestCase):
 
         self.assertEqual(result["mode"], "deep_report_draft")
         self.assertEqual(result["style"]["name"], "经济观察报")
-        self.assertEqual(len(result["sections"]), 3)
+        self.assertEqual(result["draft_status"]["status"], "blocked_missing_source_content")
+        self.assertEqual(result["article_text"], "")
 
     def test_caixin_draft(self):
         payload = {
@@ -30,7 +31,7 @@ class DeepReportDrafterTests(unittest.TestCase):
         result = draft_deep_report(payload, style="caixin")
 
         self.assertEqual(result["style"]["name"], "财新")
-        self.assertEqual(payload["text"], result["lead"]["text"])
+        self.assertIn("净利润同比下降40%", result["lead"]["text"])
         self.assertIn("证据", result["lead"]["verification_note"])
 
     def test_draft_status(self):

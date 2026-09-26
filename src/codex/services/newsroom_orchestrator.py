@@ -50,7 +50,13 @@ def run_newsroom_orchestrator(payload: Dict[str, Any]) -> Dict[str, Any]:
     draft_text = str(payload.get("draft") or "")
     editorial = _editorial_package(draft_text) if draft_text else None
 
+    article = None
+    if payload.get("sources"):
+        from codex.services.grounded_report import write_grounded_report
+        article = write_grounded_report(payload)
+
     return {
+        "article": article,
         "mode": "newsroom_orchestrator",
         "input_count": len(items),
         "memory": memory_result,
@@ -67,6 +73,10 @@ def run_newsroom_orchestrator(payload: Dict[str, Any]) -> Dict[str, Any]:
 def _payload_to_items(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     if isinstance(payload.get("items"), list):
         return [_normalize_item(item) for item in payload["items"] if isinstance(item, dict)]
+
+    if payload.get("sources"):
+        from codex.services.grounded_report import source_items
+        return [_normalize_item(item) for item in source_items(payload)]
 
     text = str(payload.get("text") or payload.get("message") or payload.get("content") or "")
     if not text.strip():

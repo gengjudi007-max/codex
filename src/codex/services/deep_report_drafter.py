@@ -9,13 +9,26 @@ from codex.services.text_utils import compact_text, normalize_text
 def draft_deep_report(
     payload: Dict[str, Any],
     style: str = "economic_observer",
-    target_length: str = "outline",
+    target_length: str = "full",
 ) -> Dict[str, Any]:
     """Draft a guarded deep-report package based on story architecture.
 
     This function creates a newsroom-ready draft scaffold. It does not invent
     interviews, undisclosed data, or unverifiable conclusions.
     """
+    if target_length != "outline":
+        from codex.services.grounded_report import write_grounded_report
+        from codex.services.story_architecture import STYLE_PROFILES
+        report = write_grounded_report(payload)
+        paragraphs = report["paragraphs"]
+        return {**report, "mode": "deep_report_draft", "target_length": target_length,
+                "style": STYLE_PROFILES.get(style, STYLE_PROFILES["economic_observer"]),
+                "headline_options": [report["headline"]] if report["headline"] else [],
+                "lead": {"text": paragraphs[0]["text"] if paragraphs else "", "verification_note": "原文证据可追溯，不等于已核验。"},
+                "sections": [{"title": p["section"], "draft": p["text"]} for p in paragraphs[1:]],
+                "ending": {"text": ""}, "evidence_plan": {"sources": report["sources"]},
+                "draft_status": report["verification_gate"]}
+
     architecture = build_story_architecture(payload, style=style)
     lead = _draft_lead(payload, architecture)
     sections = _draft_sections(architecture)
