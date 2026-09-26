@@ -47,7 +47,7 @@ def run_newsroom_orchestrator(payload: Dict[str, Any]) -> Dict[str, Any]:
         "related_events": memory_links,
     }
 
-    draft_text = str(payload.get("draft") or payload.get("text") or payload.get("message") or "")
+    draft_text = str(payload.get("draft") or "")
     editorial = _editorial_package(draft_text) if draft_text else None
 
     return {

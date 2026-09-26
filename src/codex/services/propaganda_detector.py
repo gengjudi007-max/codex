@@ -60,6 +60,10 @@ def detect_propaganda_style(text: Any) -> Dict[str, Any]:
         structural_signals=structural_signals,
     )
 
+    # Concentrated corporate slogans can be high risk even in a single sentence.
+    if len(pr_hits) >= 3 and corporate_voice_hits and len(missing_elements) == 3:
+        score = max(score, 70)
+
     return {
         "risk_level": _risk_level(score),
         "risk_score": score,

@@ -41,19 +41,9 @@ def draft_deep_report(
 def _draft_lead(payload: Dict[str, Any], architecture: Dict[str, Any]) -> Dict[str, str]:
     source_text = _source_text(payload)
     lead_type = architecture["lead_options"][0]["type"] if architecture.get("lead_options") else "事件切入"
-    style_name = architecture["style"]["name"]
-    base = compact_text(source_text, 180) if source_text else "【待补新闻由头】"
-    if style_name == "财新":
-        text = (
-            f"{base}。这一变化的核心不只在事件本身，更在于其背后的数据口径、资金来源、"
-            "政策约束和风险传导仍需逐项核验。"
-        )
-    else:
-        text = (
-            f"{base}。在房地产行业进入存量调整周期后，类似变化已不再只是单个主体的动作，"
-            "而是折射出市场、资金与政策之间重新平衡的过程。"
-        )
-    return {"type": lead_type, "text": text, "verification_note": "导语中的事实需对应原始材料或采访记录。"}
+    # Keep supplied facts intact; do not append unsupported industry conclusions.
+    text = source_text or "【待补新闻由头】"
+    return {"type": lead_type, "text": text, "verification_note": "导语中的事实需逐项对应原始材料或采访记录；证据不足时不得外推行业结论。"}
 
 
 def _draft_sections(architecture: Dict[str, Any]) -> List[Dict[str, Any]]:

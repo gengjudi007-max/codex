@@ -30,7 +30,8 @@ class DeepReportDrafterTests(unittest.TestCase):
         result = draft_deep_report(payload, style="caixin")
 
         self.assertEqual(result["style"]["name"], "财新")
-        self.assertIn("证据", result["lead"]["text"])
+        self.assertEqual(payload["text"], result["lead"]["text"])
+        self.assertIn("证据", result["lead"]["verification_note"])
 
     def test_draft_status(self):
         payload = {

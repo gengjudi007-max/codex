@@ -58,14 +58,17 @@ def _find_long_paragraphs(paragraphs: List[str]) -> List[Dict[str, str]]:
 
 
 def _find_missing_attribution(text: str) -> List[Dict[str, str]]:
-    if re.search(r"\d+(?:\.\d+)?\s*(?:亿元|万平方米|%|个百分点)", text) and not any(
-        keyword in text for keyword in ["据", "公告", "年报", "文件", "数据显示", "披露"]
-    ):
-        return [{
-            "type": "missing_attribution",
-            "message": "稿件含关键数字但缺少明确来源，建议补充数据出处和统计口径。",
-        }]
-    return []
+    issues = []
+    for sentence in re.split(r"[。！？\n]", text):
+        if re.search(r"\d+(?:\.\d+)?\s*(?:亿元|万元|万平方米|%|％|个百分点|宗)", sentence) and not any(
+            keyword in sentence for keyword in ["据", "公告", "年报", "文件", "数据显示", "披露"]
+        ):
+            issues.append({
+                "type": "missing_attribution",
+                "message": "该句数字来源未明确，请结合上下文核验出处和统计口径。",
+                "claim": sentence.strip(),
+            })
+    return issues
 
 
 def _fact_check_queue(text: str) -> List[Dict[str, str]]:
@@ -92,8 +95,8 @@ def _fact_check_queue(text: str) -> List[Dict[str, str]]:
 
 def _structure_suggestions(paragraphs: List[str]) -> List[str]:
     suggestions = []
-    if paragraphs and len(paragraphs[0]) > 120:
-        suggestions.append("导语偏长，可压缩为事件、关键数字、核心矛盾三句话。")
+    if paragraphs and len(paragraphs[0]) > 500:
+        suggestions.append("导语超过500字，检查重复背景，保留新闻事实与核心问题。")
     if len(paragraphs) < 4:
         suggestions.append("稿件层次偏少，建议补充背景、机制解释、影响和后续观察。")
     suggestions.append("结尾建议落到可验证的后续指标，而不是泛泛预测。")
