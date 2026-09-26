@@ -58,7 +58,8 @@ class LocalPriorityQueue:
         path = Path(self.log_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         record = {"ts": datetime.now(timezone.utc).isoformat(), "action": action, "event": asdict(event)}
-        path.open("a", encoding="utf-8").write(json.dumps(record, ensure_ascii=False) + "\n")
+        with path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def build_event(event_type: str, payload: Dict[str, Any] | None = None, priority: int = 5) -> QueueEvent:

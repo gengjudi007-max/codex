@@ -36,6 +36,7 @@ HANDLERS = {
     "parse_documents": lambda payload: _parse_documents(payload),
     "import_terminal": lambda payload: _import_terminal(payload),
     "ifind_query": lambda payload: _ifind_query(payload),
+    "store_summary": lambda payload: {"mode": "store_summary", "result": summarize_jsonl(str(payload.get("path") or payload.get("store") or "data/source_items.jsonl"))},
     "search_store": lambda payload: _search_store(payload),
     "topic_pipeline": lambda payload: _topic_pipeline(payload),
 }
@@ -131,14 +132,19 @@ def _parse_documents(payload: Dict[str, Any]) -> Dict[str, Any]:
     ok, error = require_list(payload, "paths")
     if not ok:
         return error_response(error, "parse_documents")
-    return {"mode": "parse_documents", "result": parse_documents(payload.get("paths", []), source=str(payload.get("source") or "document"))}
+    items = parse_documents(payload.get("paths", []), source=str(payload.get("source") or "document"))
+    return {"mode": "parse_documents", "result": {"items": items, "signal_monitor": monitor_signals(items), "topic_pipeline": run_topic_pipeline(items)}}
 
 
 def _import_terminal(payload: Dict[str, Any]) -> Dict[str, Any]:
     path = str(payload.get("path") or "")
     if not path:
         return error_response("import_terminal 模式需要 path。", "import_terminal")
-    return {"mode": "import_terminal", "result": import_terminal_file(path, source=str(payload.get("source") or "terminal"))}
+    result = import_terminal_file(path, source=str(payload.get("source") or "terminal"))
+    cities = result["city_land_payload"]["cities"]
+    result["city_land_compare"] = compare_city_land_markets(cities) if cities else None
+    result["topic_pipeline"] = run_topic_pipeline(result["items"])
+    return {"mode": "import_terminal", "result": result}
 
 
 def _ifind_query(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -154,7 +160,8 @@ def _search_store(payload: Dict[str, Any]) -> Dict[str, Any]:
     query = str(payload.get("query") or payload.get("keyword") or "")
     limit = int(payload.get("limit", 20))
     offset = int(payload.get("offset", 0))
-    return {"mode": "search_store", "result": {"search": search_jsonl(path, query=query, limit=limit, offset=offset), "summary": summarize_jsonl(path)}}
+    search = search_jsonl(path, query=query, limit=limit, offset=offset)
+    return {"mode": "search_store", "result": {**search, "search": search, "summary": summarize_jsonl(path)}}
 
 
 def _topic_pipeline(payload: Dict[str, Any]) -> Dict[str, Any]:

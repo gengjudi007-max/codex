@@ -47,13 +47,23 @@ def final_edit_report(payload: Dict[str, Any], style: str = "economic_observer")
 
 
 def polish_news_text(text: Any, subject: str | None = None) -> str:
-    normalized = normalize_text(text)
-    normalized = _replace_terms(normalized, PR_REPLACEMENTS)
-    normalized = _replace_terms(normalized, RISKY_CERTAINTY)
-    normalized = _third_person_view(normalized, subject)
-    normalized = _normalize_company_reference(normalized, subject)
-    normalized = _clean_template_phrases(normalized)
-    return normalized
+    # Preserve quotations and paragraph structure. Certainty and promotional
+    # claims require an editorial decision, not synonym substitution.
+    original = str(text or "").strip()
+    parts = re.split(r'(“[^”]*”|「[^」]*」|‘[^’]*’|"[^"\n]*")', original)
+    for index in range(0, len(parts), 2):
+        segment = parts[index]
+        if subject:
+            # Resolve only standalone sentence-initial references; never alter
+            # registered names, subsidiaries, or references to other companies.
+            segment = re.sub(
+                r"(^|[。！？\n])([ \t]*)(?:我们|我司|公司)(?=将|始终|持续|坚持|致力于|称|表示|披露)",
+                lambda match: match.group(1) + match.group(2) + str(subject),
+                segment,
+            )
+        segment = re.sub(r"(^|[。！？\n])([ \t]*)(?:值得注意的是|不可否认的是|从某种程度上说|在这一过程中)，", r"\1\2", segment)
+        parts[index] = segment
+    return "".join(parts)
 
 
 def _assemble_draft(draft: Dict[str, Any]) -> str:
@@ -113,8 +123,8 @@ def _final_headline(draft: Dict[str, Any]) -> str:
 
 def _editorial_notes(draft: Dict[str, Any], propaganda: Dict[str, Any]) -> List[str]:
     notes = [
-        "已按第三方财经报道视角压缩宣传性表达。",
-        "已将强确定性表达调整为审慎风险表达。",
+        "仅清理句首套话；有明确主体时调整独立的企业自称，保留引语和专名。",
+        "宣传性、绝对化和因果判断需人工核验，不以近义词替换改变原意。",
         "正式发布前仍需逐项核验事实、数字、时间和来源。",
     ]
     status = draft.get("draft_status", {}).get("status")
