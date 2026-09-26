@@ -323,3 +323,13 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 ## License
 
 MIT License
+
+## 来源驱动的报道输出
+
+已提供来源正文时，可直接运行：
+
+```bash
+PYTHONPATH=src python -m codex.cli report --input examples/policy_828.json --output /tmp/policy-828.md
+```
+
+默认离线摘编，输出带来源的正文，不把提纲当成成稿。可选的模型写作需要服务端安全配置；网页/API、来源格式、验证边界和828真实案例结果见 [报道流程说明](docs/REPORT_WORKFLOW.md)。

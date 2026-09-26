@@ -25,6 +25,8 @@ class TopicRule:
 
     def build_topic(self, item: Dict[str, Any]) -> Dict[str, Any]:
         return {
+            "rule_name": self.name,
+            "matched_terms": [word for word in self.keywords if word in _normalize_text(item)],
             "topic": self.topic_template.format(**_safe_item(item)),
             "category": self.category,
             "angle": self.angle,
@@ -58,6 +60,36 @@ def _normalize_text(item: Dict[str, Any]) -> str:
 
 
 REAL_ESTATE_TOPIC_RULES: List[TopicRule] = [
+    TopicRule(
+        name="housing_sales_implementation", category="政策解读",
+        keywords=["现房销售", "封顶预售", "主体结构封顶", "商品住房销售", "预售许可", "预售条件"],
+        topic_template="{title}的执行条件与项目影响",
+        angle="核对销售方式、许可时间、过渡安排和资金到账节点，比较政策规定与项目执行。",
+        reason="销售和回款节点改变会影响开发资金安排及购房人交付风险。", score=94,
+        materials=["政策原文及实施细则", "出让公告和成交公示", "规划与预售许可证", "开发贷合同与提款记录"],
+        interview_targets=["住建部门", "房企项目负责人", "贷款银行"],
+        questions=["哪些项目适用新规，哪些享有过渡安排？", "签约、按揭发放和解除监管分别需要什么条件？", "项目建设资金能否按时到位？"],
+    ),
+    TopicRule(
+        name="project_credit_implementation", category="不动产金融",
+        keywords=["主办银行", "开发贷款", "开发贷", "按揭贷款", "竣工备案后", "项目资本金", "封闭管理"],
+        topic_template="{title}涉及的项目融资与资金使用变化",
+        angle="区分授信、合同、提款与实际资金投向，追踪项目资金能否覆盖建设周期。",
+        reason="融资期限和用途约束直接影响项目建设及回款安排。", score=91,
+        materials=["信贷管理办法", "贷款合同", "实际提款和工程付款记录"],
+        interview_targets=["贷款银行", "房企财务负责人", "项目施工方"],
+        questions=["开发贷款何时发放？", "首次还本和按揭到账是什么时间？", "资金是否只能用于本项目？"],
+    ),
+    TopicRule(
+        name="land_transaction_event", category="土地市场",
+        keywords=["商住用地", "住宅用地", "涉宅用地", "地块成交", "土地出让", "竞得"],
+        topic_template="{title}的交易条件与开发安排",
+        angle="核对出让条件、成交状态、竞得主体和付款安排，不由单宗成交外推市场趋势。",
+        reason="土地交易是观察新制度进入项目投资的具体窗口。", score=90,
+        materials=["出让公告", "成交公示", "竞买须知", "项目开发计划"],
+        interview_targets=["自然资源部门", "竞得企业", "土地市场研究人士"],
+        questions=["挂牌还是已成交？", "现房销售是否为强制条件？", "成交后如何安排土地款与建设资金？"],
+    ),
     TopicRule(
         name="policy_language_shift",
         category="政策解读",
@@ -163,6 +195,8 @@ def find_topics(input_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     topics: List[Dict[str, Any]] = []
 
     for item in items:
+        if not isinstance(item, dict):
+            continue
         for rule in REAL_ESTATE_TOPIC_RULES:
             if rule.match(item):
                 topics.append(rule.build_topic(item))

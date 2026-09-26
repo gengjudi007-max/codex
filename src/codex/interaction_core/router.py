@@ -26,6 +26,9 @@ def infer_mode(payload: Dict[str, Any]) -> str:
     if payload.get("tracking") is True:
         return "signal_monitor"
     if "sources" in payload:
+        sources = payload["sources"]
+        if isinstance(sources, list) and any(isinstance(s, dict) and (s.get("content") or s.get("text") or s.get("summary")) for s in sources):
+            return "report"
         return "fetch_sources"
     if "query" in payload and "path" in payload:
         return "search_store"

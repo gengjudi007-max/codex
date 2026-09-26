@@ -29,21 +29,21 @@ RISKY_CERTAINTY = {
 
 
 def final_edit_report(payload: Dict[str, Any], style: str = "economic_observer") -> Dict[str, Any]:
-    draft = draft_deep_report(payload, style=style)
-    assembled = _assemble_draft(draft)
-    polished = polish_news_text(assembled, subject=payload.get("subject") or payload.get("company"))
-    propaganda = detect_propaganda_style(polished)
-
-    return {
-        "mode": "final_editorial_engine",
-        "style": draft["style"],
-        "headline": _final_headline(draft),
-        "edited_text": polished,
-        "editorial_notes": _editorial_notes(draft, propaganda),
-        "verification_gate": draft.get("draft_status", {}),
-        "fact_check_required": draft.get("evidence_plan", {}),
-        "claim_boundary": "终稿编辑引擎只做表达和结构收口；若证据、采访或来源不足，应停留在待核验稿，不进入正式终稿。",
-    }
+    if payload.get("sources"):
+        from codex.services.grounded_report import write_grounded_report
+        report = write_grounded_report(payload)
+        return {**report, "mode": "final_editorial_engine", "style": style,
+                "edited_text": report["article_text"],
+                "editorial_notes": report["verification_gate"]["issues"],
+                "fact_check_required": report["paragraphs"]}
+    # Editing an existing draft must not append an unrelated writing scaffold.
+    text = payload.get("draft") or payload.get("text") or payload.get("message") or ""
+    polished = polish_news_text(text, subject=payload.get("subject") or payload.get("company"))
+    return {"mode": "final_editorial_engine", "style": style,
+            "headline": str(payload.get("headline") or ""), "edited_text": polished,
+            "editorial_notes": ["原稿精校；未提供来源正文，事实仍需核验。"],
+            "verification_gate": {"status": "unverified_draft" if polished else "blocked_missing_source_content", "publishable": False},
+            "fact_check_required": [], "claim_boundary": "不自动确认事实或发布稿件。"}
 
 
 def polish_news_text(text: Any, subject: str | None = None) -> str:
